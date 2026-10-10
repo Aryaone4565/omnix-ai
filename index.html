@@ -1,1 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMNIX AI</title>
 
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #090b10;
+  color: #f4f4f5;
+  font-family: Arial, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 18px;
+  border-bottom: 1px solid #252832;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 23px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  background: linear-gradient(90deg, #a78bfa, #38bdf8);
+  color: transparent;
+  background-clip: text;
+}
+
+.status {
+  font-size: 11px;
+  color: #a1a1aa;
+}
+
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.welcome {
+  text-align: center;
+  margin: 15vh auto 35px;
+}
+
+.orb {
+  width: 75px;
+  height: 75px;
+  border-radius: 50%;
+  margin: auto auto 25px;
+  background: radial-gradient(circle at 30% 30%, #38bdf8, #6d28d9 55%, #090b10);
+  box-shadow: 0 0 45px #6d28d955;
+}
+
+h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #a1a1aa;
+  line-height: 1.6;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  max-width: 500px;
+  margin: 25px auto;
+}
+
+.suggestions button {
+  background: #151821;
+  color: #d4d4d8;
+  border: 1px solid #292d3a;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+#messages {
+  max-width: 700px;
+  margin: auto;
+}
+
+.message {
+  padding: 14px 16px;
+  border-radius: 15px;
+  margin: 12px 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user {
+  background: #24243a;
+  margin-left: 12%;
+}
+
+.assistant {
+  background: #14171e;
+  border: 1px solid #292d35;
+  margin-right: 5%;
+}
+
+footer {
+  padding: 14px;
+  border-top: 1px solid #252832;
+}
+
+.composer {
+  max-width: 700px;
+  margin: auto;
+  display: flex;
+  gap: 10px;
+  background: #151821;
+  border: 1px solid #343846;
+  border-radius: 16px;
+  padding: 8px;
+}
+
+textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  height: 45px;
+  max-height: 120px;
+  background: transparent;
+  color: white;
+  border: none;
+  outline: none;
+  padding: 12px 8px;
+  font: inherit;
+}
+
+#send {
+  width: 45px;
+  border: none;
+  border-radius: 12px;
+  background: #8b5cf6;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.note {
+  text-align: center;
+  color: #71717a;
+  font-size: 11px;
+  margin-top: 10px;
+}
+
+button:active {
+  transform: scale(.97);
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">OMNIX</div>
+  <div class="status">● AI WORKSPACE</div>
+</header>
+
+<main id="chat">
+  <section class="welcome" id="welcome">
+    <div class="orb"></div>
+    <h1>Think beyond.</h1>
+    <p class="subtitle">
+      Your ideas. Your questions.<br>
+      One intelligent workspace.
+    </p>
+
+    <div class="suggestions">
+      <button onclick="suggest('Help me learn coding')">
+        💻 Learn coding
+      </button>
+      <button onclick="suggest('Explain artificial intelligence')">
+        🧠 Explore AI
+      </button>
+      <button onclick="suggest('Help me build a website')">
+        🌐 Build a website
+      </button>
+      <button onclick="suggest('Give me an interesting space fact')">
+        🚀 Explore space
+      </button>
+    </div>
+  </section>
+
+  <div id="messages"></div>
+</main>
+
+<footer>
+  <div class="composer">
+    <textarea id="input" placeholder="Ask OMNIX anything..."
+      rows="1"></textarea>
+    <button id="send" aria-label="Send message">↑</button>
+  </div>
+  <div class="note">OMNIX can make mistakes. Verify important information.</div>
+</footer>
+
+<script>
+const input = document.getElementById("input");
+const messages = document.getElementById("messages");
+const welcome = document.getElementById("welcome");
+const send = document.getElementById("send");
+
+function suggest(text) {
+  input.value = text;
+  input.focus();
+}
+
+function addMessage(text, type) {
+  const message = document.createElement("div");
+  message.className = "message " + type;
+  message.textContent = text;
+  messages.appendChild(message);
+  document.getElementById("chat").scrollTop =
+    document.getElementById("chat").scrollHeight;
+}
+
+function submitMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  welcome.style.display = "none";
+  addMessage(text, "user");
+  input.value = "";
+
+  addMessage(
+    "OMNIX interface is working! The AI engine has not been connected yet. Our next step is to connect Gemini securely.",
+    "assistant"
+  );
+}
+
+send.addEventListener("click", submitMessage);
+
+input.addEventListener("keydown", function(event) {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    submitMessage();
+  }
+});
+</script>
+
+</body>
+</html>
