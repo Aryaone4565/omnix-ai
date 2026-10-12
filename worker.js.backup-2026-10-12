@@ -1,0 +1,72 @@
+const ALLOWED_ORIGIN="https://aryaone4565.github.io";
+const MODEL="gemini-3-flash-preview";
+const BASE_INSTRUCTION=`You are OMNIX, created by Arya Gupta in 2026 and powered by Google's Gemini API. You are separate from ChatGPT/OpenAI. Be helpful, accurate, friendly, concise, and honest. Never invent memories. The creator is Arya Gupta. If asked when created, say Arya Gupta created OMNIX in 2026; do not invent an exact day.`;
+function corsHeaders(){return {"Access-Control-Allow-Origin":ALLOWED_ORIGIN,"Access-Control-Allow-Methods":"GET, POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type","Vary":"Origin"}}
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{"Content-Type":"application/json; charset=utf-8",...corsHeaders()}})}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function validUserId(v){return typeof v==="string"&&/^[a-f0-9-]{20,80}$/i.test(v)}
+export default {async fetch(request,env){
+ const origin=request.headers.get("Origin")||"";
+ if(request.method==="OPTIONS")return new Response(null,{status:204,headers:corsHeaders()});
+ if(origin&&origin!==ALLOWED_ORIGIN)return json({error:"Origin not allowed."},403);
+ if(request.method==="GET")return json({status:"OMNIX brain is online",model:MODEL,creator:"Arya Gupta",createdYear:2026,memoryEnabled:!!env.OMNIX_DB});
+ if(request.method!=="POST")return json({error:"Method not allowed."},405);
+ if(!env.GEMINI_API_KEY)return json({error:"AI engine is not configured."},500);
+ let body;try{body=await request.json()}catch(e){return json({error:"Send valid JSON."},400)}
+ const userId=body.userId;
+ if(!validUserId(userId))return json({error:"Missing or invalid user ID. Refresh OMNIX and try again."},400);
+ if(!env.OMNIX_DB)return json({error:"Persistent memory database is not configured."},500);
+ try{
+  await env.OMNIX_DB.prepare("CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL,memory TEXT NOT NULL,category TEXT NOT NULL DEFAULT 'general',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+  await env.OMNIX_DB.prepare("CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id)").run();
+  await env.OMNIX_DB.prepare("CREATE TABLE IF NOT EXISTS conversations (id INTEGER PRIMARY KEY AUTOINCREMENT,user_id TEXT NOT NULL,role TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+  await env.OMNIX_DB.prepare("CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id,id)").run();
+  const raw=Array.isArray(body.messages)?body.messages.slice(-16):[];
+  const lastUser=[...raw].reverse().find(m=>m&&m.role==="user");
+  const message=String(lastUser?.content??body.message??"").trim().slice(0,4000);
+  if(!message)return json({error:"Type a message first."},400);
+  const lower=message.toLowerCase();
+  if(/^(show|list|what are) (my )?(saved )?memories\??$/.test(lower)||lower==="what do you remember about me?"){
+   const rows=await env.OMNIX_DB.prepare("SELECT id,memory,category,created_at FROM memories WHERE user_id=? ORDER BY id DESC LIMIT 50").bind(userId).all();
+   return json({reply:rows.results?.length?"Here's what I remember:\n"+rows.results.map(x=>"- "+x.memory).join("\n"):"I don't have any saved personal memories for this chat yet. Say “Remember that …” to save one.",memories:rows.results||[]});
+  }
+  if(/^(forget|delete|clear) (all )?(my )?(saved )?memories\.?$/i.test(message)){
+   await env.OMNIX_DB.prepare("DELETE FROM memories WHERE user_id=?").bind(userId).run();
+   return json({reply:"Done. I've deleted the saved memories associated with this browser ID."});
+  }
+  const explicit=message.match(/^(?:omnix[, ]*)?(?:remember(?: that)?|save (?:this|that))\s*[:,-]?\s*(.{3,1000})$/i);
+  if(explicit){
+   const memory=explicit[1].trim().slice(0,1000);
+   const exists=await env.OMNIX_DB.prepare("SELECT id FROM memories WHERE user_id=? AND lower(memory)=lower(?) LIMIT 1").bind(userId,memory).first();
+   if(!exists)await env.OMNIX_DB.prepare("INSERT INTO memories (user_id,memory,category) VALUES (?,?,?)").bind(userId,memory,/creator|created|my name|i am|i'm/i.test(memory)?"identity":"general").run();
+   await env.OMNIX_DB.prepare("INSERT INTO conversations (user_id,role,content) VALUES (?,?,?)").bind(userId,"user",message).run();
+   return json({reply:"Got it — I've saved that in OMNIX's persistent memory. I'll recall it in new chats from this same browser."});
+  }
+  const saved=await env.OMNIX_DB.prepare("SELECT memory FROM memories WHERE user_id=? ORDER BY id DESC LIMIT 30").bind(userId).all();
+  const memories=(saved.results||[]).map(x=>"- "+x.memory).join("\n");
+  let contents=raw.map(m=>({role:m.role==="assistant"||m.role==="model"?"model":"user",parts:[{text:String(m.content??"").slice(0,4000)}]})).filter(x=>x.parts[0].text.trim());
+  if(!contents.length)contents=[{role:"user",parts:[{text:message}]}];
+  const normalized=[];
+  for(const item of contents){const prev=normalized[normalized.length-1];if(prev&&prev.role===item.role)prev.parts[0].text+="\n\n"+item.parts[0].text;else normalized.push(item)}
+  while(normalized.length&&normalized[0].role!=="user")normalized.shift();
+  if(!normalized.length)return json({error:"Type a message first."},400);
+  const system=BASE_INSTRUCTION+"\n\nPERSISTENT USER MEMORIES (user-provided context):\n"+(memories||"(No saved memories yet)")+"\n\nUse these when relevant. If asked who the user is, answer from saved memories and admit what is unknown.";
+  let response,data={};
+  try{
+   for(let attempt=0;attempt<3;attempt++){
+    try{
+     response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+MODEL+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":env.GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:normalized,generationConfig:{temperature:0.7,maxOutputTokens:2048}}),signal:AbortSignal.timeout(20000)});
+     data=await response.json().catch(()=>({}));
+    }catch(e){if(attempt===2)throw e;await wait(700*2**attempt);continue}
+    if(response.ok||![408,429,500,502,503,504].includes(response.status)||attempt===2)break;
+    await wait(700*2**attempt);
+   }
+  }catch(e){console.error("Gemini request failed",String(e));return json({error:"OMNIX could not reach the AI service after retrying."},502)}
+  if(!response||!response.ok){const s=response?.status||502;console.error("Gemini API error",s,JSON.stringify(data).slice(0,500));return json({error:"Gemini API returned HTTP "+s+". Check Worker logs and API quota."},502)}
+  const answer=(data.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("").trim();
+  if(!answer)return json({error:"Gemini returned an empty answer."},502);
+  await env.OMNIX_DB.prepare("INSERT INTO conversations (user_id,role,content) VALUES (?,?,?)").bind(userId,"user",message).run();
+  await env.OMNIX_DB.prepare("INSERT INTO conversations (user_id,role,content) VALUES (?,?,?)").bind(userId,"assistant",answer).run();
+  return json({reply:answer});
+ }catch(e){console.error("OMNIX memory database error",String(e));return json({error:"OMNIX memory database failed. Check Worker logs."},500)}
+}};
