@@ -58,8 +58,8 @@ function getMessageText(body) {
 }
 
 function shouldSearchWeb(message) {
-  return /\\b(search the web|search online|web search|look (?:this|that) up|look up|find online|browse the web|check online|latest|current news|today's news|recent news|breaking news|as of today|right now|current price|price today|weather today|current weather|who won|what happened today|recent updates|latest updates|latest version|current version)\\b/i.test(message) ||
-    /^(?:search|look up|browse)\\s+(?:for\\s+)?/i.test(message);
+  return /\b(search the web|search online|web search|look (?:this|that) up|look up|find online|browse the web|check online|latest|current news|today's news|recent news|breaking news|as of today|right now|current price|price today|weather today|current weather|who won|what happened today|recent updates|latest updates|latest version|current version)\b/i.test(message) ||
+    /^(?:search|look up|browse)\s+(?:for\s+)?/i.test(message);
 }
 
 async function searchWeb(env, query) {
@@ -80,7 +80,7 @@ async function searchWeb(env, query) {
     }
     const data = await response.json();
     const sources = (Array.isArray(data.items) ? data.items : [])
-      .filter(item => item && typeof item.url === "string" && /^https?:\\/\\//i.test(item.url))
+      .filter(item => item && typeof item.url === "string" && /^https?:\/\//i.test(item.url))
       .slice(0, 5)
       .map(item => ({
         title: String(item.title || item.url).slice(0, 240),
