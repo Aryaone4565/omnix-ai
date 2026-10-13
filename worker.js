@@ -144,9 +144,16 @@ function cleanSearchQuery(query) {
 }
 
 function xmlTag(item, tag) {
-  const match = item.match(new RegExp("<" + tag + "(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)<\\\\/" + tag + ">", "i"));
+  const patterns = {
+    title: /<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i,
+    link: /<link(?:\s[^>]*)?>([\s\S]*?)<\/link>/i,
+    description: /<description(?:\s[^>]*)?>([\s\S]*?)<\/description>/i,
+    pubDate: /<pubDate(?:\s[^>]*)?>([\s\S]*?)<\/pubDate>/i
+  };
+  const match = (patterns[tag] || /$^/).exec(item);
   if (!match) return "";
-  return decodeHtml(match[1].replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1").trim());
+  const value = match[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
+  return decodeHtml(value);
 }
 
 async function searchGoogleNewsRSS(query) {
@@ -158,7 +165,7 @@ async function searchGoogleNewsRSS(query) {
   });
   if (!response.ok) throw new Error("Google News RSS returned HTTP " + response.status);
   const xml = await response.text();
-  const items = [...xml.matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/gi)].slice(0, 5);
+  const items = [...xml.matchAll(/<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi)].slice(0, 5);
   return items.map(match => {
     const item = match[1];
     const title = stripHtml(xmlTag(item, "title"));
@@ -170,7 +177,7 @@ async function searchGoogleNewsRSS(query) {
       url: link,
       description: (description + (pubDate ? " Published: " + pubDate : "")).slice(0, 700)
     };
-  }).filter(item => item.title && /^https?:\\/\\//i.test(item.url));
+  }).filter(item => item.title && /^https?:\/\//i.test(item.url));
 }
 
 async function searchWeb(env, query) {
