@@ -135,14 +135,15 @@ async function searchWikipedia(query) {
 
 
 function cleanSearchQuery(query) {
-  return String(query || "")
-    .replace(/^(?:please\s+)?(?:search(?:\s+the\s+web)?|browse(?:\s+the\s+web)?|look\s+up|find\s+online)\s+(?:for\s+)?/i, "")
-    .replace(/^(?:the\s+)?latest\s+/i, "")
-    .replace(/^(?:current|recent|today'?s?)\s+/i, "")
-    .trim()
-    .slice(0, 300) || String(query || "").slice(0, 300);
+  let q = String(query || "").trim();
+  // Remove conversational wrappers that users often include when asking OMNIX to search.
+  q = q.replace(/^(?:hey\\s+omnix[,! ]*)?(?:i(?:'ll| will| want to| need you to)\\s+)?(?:please\\s+)?(?:can you\\s+)?(?:search(?:\\s+the\\s+web)?|browse(?:\\s+the\\s+web)?|look\\s+up|find\\s+online|check\\s+online)\\s+(?:for\\s+)?/i, "");
+  q = q.replace(/^(?:the\\s+)?(?:latest|current|recent|today'?s?)\\s+/i, "");
+  // Keep only the requested topic, not the explanation that follows it.
+  q = q.split(/\\s+(?:based on the information|here is what|please note|if you'?re looking|i can suggest)\\b/i)[0];
+  q = q.replace(/[.!?]+$/, "").trim();
+  return q.slice(0, 300) || String(query || "").slice(0, 300);
 }
-
 function xmlTag(item, tag) {
   const patterns = {
     title: /<title(?:\s[^>]*)?>([\s\S]*?)<\/title>/i,
@@ -210,27 +211,27 @@ async function searchWeb(env, query) {
     }
   } else errors.push("Cloudflare search binding unavailable");
 
-  const providers = [
-    ["Google News RSS", () => searchGoogleNewsRSS(searchQuery)],
-    ["DuckDuckGo", () => searchDuckDuckGo(searchQuery)],
-    ["Wikipedia", () => searchWikipedia(searchQuery)]
-  ];
-  const attempts = providers.map(([name, run]) => run().then(sources => {
-    if (!sources.length) throw new Error(name + " returned no usable results");
-    return { ok: true, sources, provider: name };
-  }).catch(error => {
-    const message = name + ": " + String(error?.message || error).slice(0, 120);
-    errors.push(message);
-    console.error("OMNIX search fallback failed:", message);
-    throw error;
-  }));
-  try {
-    const result = await Promise.any(attempts);
-    console.log("OMNIX web search used " + result.provider + ".");
-    return { ok: true, sources: result.sources, error: "" };
-  } catch {
-    return { ok: false, sources: [], error: errors.join("; ").slice(0, 500) || "No search provider is available." };
+  const isNewsQuery = /\\b(news|latest|current|recent|today|breaking|updates|launch|mission|achievement)\\b/i.test(String(query || ""));
+  // For news, prioritize a news index; Wikipedia can otherwise win the race with stale or unrelated pages.
+  const providers = isNewsQuery
+    ? [["Google News RSS", () => searchGoogleNewsRSS(searchQuery)], ["DuckDuckGo", () => searchDuckDuckGo(searchQuery)]]
+    : [["DuckDuckGo", () => searchDuckDuckGo(searchQuery)], ["Wikipedia", () => searchWikipedia(searchQuery)], ["Google News RSS", () => searchGoogleNewsRSS(searchQuery)]];
+  for (const [name, run] of providers) {
+    try {
+      const sources = await run();
+      const usable = sources.filter(item => item && item.title && item.url);
+      if (usable.length) {
+        console.log("OMNIX web search used " + name + " for: " + searchQuery);
+        return { ok: true, sources: usable.slice(0, 5), error: "" };
+      }
+      errors.push(name + ": no usable results");
+    } catch (error) {
+      const message = name + ": " + String(error?.message || error).slice(0, 120);
+      errors.push(message);
+      console.error("OMNIX search fallback failed:", message);
+    }
   }
+  return { ok: false, sources: [], error: errors.join("; ").slice(0, 500) || "No search provider is available." };
 }
 function normalizeMessages(body, fallbackMessage) {
   const source = Array.isArray(body.messages) ? body.messages.slice(-16) : [];
