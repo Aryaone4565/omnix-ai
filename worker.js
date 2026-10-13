@@ -57,6 +57,43 @@ function getMessageText(body) {
   return String(lastUser?.content ?? body.message ?? "").trim().slice(0, 4000);
 }
 
+function shouldSearchWeb(message) {
+  return /\\b(search the web|search online|web search|look (?:this|that) up|look up|find online|browse the web|check online|latest|current news|today's news|recent news|breaking news|as of today|right now|current price|price today|weather today|current weather|who won|what happened today|recent updates|latest updates|latest version|current version)\\b/i.test(message) ||
+    /^(?:search|look up|browse)\\s+(?:for\\s+)?/i.test(message);
+}
+
+async function searchWeb(env, query) {
+  if (!env.AI || typeof env.AI.websearch !== "function") {
+    return { ok: false, sources: [], error: "Web search is not available on this Worker runtime." };
+  }
+  try {
+    const response = await env.AI.websearch({
+      gatewayId: "default",
+      query: query.slice(0, 1024),
+      provider: "exa",
+      limit: 5
+    });
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      console.error("OMNIX web search HTTP error:", response.status, details.slice(0, 500));
+      return { ok: false, sources: [], error: "The search provider returned HTTP " + response.status + "." };
+    }
+    const data = await response.json();
+    const sources = (Array.isArray(data.items) ? data.items : [])
+      .filter(item => item && typeof item.url === "string" && /^https?:\\/\\//i.test(item.url))
+      .slice(0, 5)
+      .map(item => ({
+        title: String(item.title || item.url).slice(0, 240),
+        url: item.url,
+        description: String(item.description || "").slice(0, 700)
+      }));
+    return { ok: sources.length > 0, sources, error: sources.length ? "" : "No usable search results were returned." };
+  } catch (error) {
+    console.error("OMNIX web search failed:", String(error?.message || error).slice(0, 500));
+    return { ok: false, sources: [], error: String(error?.message || "Search request failed.").slice(0, 250) };
+  }
+}
+
 function normalizeMessages(body, fallbackMessage) {
   const source = Array.isArray(body.messages) ? body.messages.slice(-16) : [];
   const mapped = source
@@ -322,6 +359,24 @@ export default {
         return json({ error: "The latest chat message must be from the user. Please send it again." }, 400);
       }
 
+      let search = { ok: false, sources: [], error: "" };
+      if (shouldSearchWeb(message)) {
+        search = await searchWeb(env, message);
+        if (search.ok) {
+          const sourceContext = search.sources.map((item, index) =>
+            "[" + (index + 1) + "] " + item.title + "\\nURL: " + item.url + "\\nDescription: " + item.description
+          ).join("\\n\\n");
+          systemInstruction +=
+            "\\n\\nLIVE WEB SEARCH RESULTS (retrieved for the user's latest request):\\n" +
+            sourceContext +
+            "\\nUse these results as evidence for current facts. Cite sources in your answer using their exact URLs or titles. Do not claim details that the results do not support.";
+        } else {
+          systemInstruction +=
+            "\\n\\nThe user requested web search, but the live search request failed (" + search.error +
+            "). Do not claim that you searched the web or present time-sensitive claims as verified. Tell the user briefly that live search is currently unavailable.";
+        }
+      }
+
       const result = await callGemini(systemInstruction, contents, env.GEMINI_API_KEY, env.AI);
       if (!result.ok) {
         return json({
@@ -332,7 +387,13 @@ export default {
         }, result.status);
       }
 
-      return json({ reply: result.answer, model: result.model || MODEL });
+      return json({
+        reply: result.answer,
+        model: result.model || MODEL,
+        sources: search.sources,
+        webSearchUsed: search.ok,
+        webSearchUnavailable: shouldSearchWeb(message) && !search.ok
+      });
     } catch (error) {
       console.error("OMNIX database or request error:", String(error?.stack || error));
       return json({ error: "OMNIX encountered a database or server error. Check the latest Worker logs." }, 500);
