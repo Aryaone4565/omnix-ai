@@ -133,13 +133,54 @@ async function searchWikipedia(query) {
   })).filter(item => /^https?:\/\//i.test(item.url)).slice(0, 5);
 }
 
+
+function cleanSearchQuery(query) {
+  return String(query || "")
+    .replace(/^(?:please\s+)?(?:search(?:\s+the\s+web)?|browse(?:\s+the\s+web)?|look\s+up|find\s+online)\s+(?:for\s+)?/i, "")
+    .replace(/^(?:the\s+)?latest\s+/i, "")
+    .replace(/^(?:current|recent|today'?s?)\s+/i, "")
+    .trim()
+    .slice(0, 300) || String(query || "").slice(0, 300);
+}
+
+function xmlTag(item, tag) {
+  const match = item.match(new RegExp("<" + tag + "(?:\\\\s[^>]*)?>([\\\\s\\\\S]*?)<\\\\/" + tag + ">", "i"));
+  if (!match) return "";
+  return decodeHtml(match[1].replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g, "$1").trim());
+}
+
+async function searchGoogleNewsRSS(query) {
+  const url = "https://news.google.com/rss/search?q=" +
+    encodeURIComponent(query.slice(0, 300)) + "&hl=en-IN&gl=IN&ceid=IN:en";
+  const response = await fetch(url, {
+    headers: { "Accept": "application/rss+xml, application/xml, text/xml", "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0)" },
+    signal: AbortSignal.timeout(9000)
+  });
+  if (!response.ok) throw new Error("Google News RSS returned HTTP " + response.status);
+  const xml = await response.text();
+  const items = [...xml.matchAll(/<item(?:\\s[^>]*)?>([\\s\\S]*?)<\\/item>/gi)].slice(0, 5);
+  return items.map(match => {
+    const item = match[1];
+    const title = stripHtml(xmlTag(item, "title"));
+    const link = xmlTag(item, "link").trim();
+    const description = stripHtml(xmlTag(item, "description"));
+    const pubDate = xmlTag(item, "pubDate");
+    return {
+      title: (title || link).slice(0, 240),
+      url: link,
+      description: (description + (pubDate ? " Published: " + pubDate : "")).slice(0, 700)
+    };
+  }).filter(item => item.title && /^https?:\\/\\//i.test(item.url));
+}
+
 async function searchWeb(env, query) {
+  const searchQuery = cleanSearchQuery(query);
   const errors = [];
   if (env.AI && typeof env.AI.websearch === "function") {
     try {
       const response = await env.AI.websearch({
         gatewayId: "default",
-        query: query.slice(0, 1024),
+        query: searchQuery.slice(0, 1024),
         provider: "exa",
         limit: 5
       });
@@ -171,7 +212,19 @@ async function searchWeb(env, query) {
   }
 
   try {
-    const sources = await searchDuckDuckGo(query);
+    const sources = await searchGoogleNewsRSS(searchQuery);
+    if (sources.length) {
+      console.log("OMNIX web search used Google News RSS fallback.");
+      return { ok: true, sources, error: "" };
+    }
+    errors.push("Google News RSS returned no usable results");
+  } catch (error) {
+    errors.push("Google News RSS: " + String(error?.message || error).slice(0, 180));
+    console.error("OMNIX Google News RSS fallback failed:", errors[errors.length - 1]);
+  }
+
+  try {
+    const sources = await searchDuckDuckGo(searchQuery);
     if (sources.length) {
       console.log("OMNIX web search used DuckDuckGo fallback.");
       return { ok: true, sources, error: "" };
@@ -183,7 +236,7 @@ async function searchWeb(env, query) {
   }
 
   try {
-    const sources = await searchWikipedia(query);
+    const sources = await searchWikipedia(searchQuery);
     if (sources.length) {
       console.log("OMNIX web search used Wikipedia fallback.");
       return { ok: true, sources, error: "" };
