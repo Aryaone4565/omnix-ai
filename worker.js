@@ -298,7 +298,8 @@ export default {
         return json({
           error: result.message,
           model: MODEL,
-          upstreamStatus: result.upstreamStatus
+          upstreamStatus: result.upstreamStatus,
+          diagnostic: result.upstreamMessage
         }, result.status);
       }
 
