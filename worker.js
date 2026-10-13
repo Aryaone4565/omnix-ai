@@ -86,7 +86,7 @@ function normalizeMessages(body, fallbackMessage) {
   return contents;
 }
 
-async function callGemini(systemInstruction, contents, apiKey) {
+async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
   const models = [MODEL, FALLBACK_MODEL];
   let lastStatus = 502;
   let lastError = "Unknown Gemini API error.";
@@ -153,6 +153,31 @@ async function callGemini(systemInstruction, contents, apiKey) {
 
     // Only switch models for a temporary upstream outage/overload.
     if (lastStatus !== 503 && lastStatus !== 502 && lastStatus !== 504) break;
+  }
+
+  // Independent fallback: Cloudflare Workers AI, if the AI binding is configured.
+  if (cloudflareAI) {
+    try {
+      const messages = [
+        { role: "system", content: systemInstruction },
+        ...contents.map(item => ({
+          role: item.role === "model" ? "assistant" : "user",
+          content: (item.parts || []).map(part => part.text || "").join("")
+        }))
+      ];
+      const cfResult = await cloudflareAI.run("@cf/meta/llama-3.1-8b-instruct-fp8", {
+        messages,
+        max_tokens: 2048
+      });
+      const cfAnswer = String(cfResult?.response || cfResult?.choices?.[0]?.message?.content || "").trim();
+      if (cfAnswer) {
+        console.log("OMNIX used Cloudflare Workers AI fallback.");
+        return { ok: true, answer: cfAnswer, model: "cloudflare:@cf/meta/llama-3.1-8b-instruct-fp8" };
+      }
+      console.error("Cloudflare Workers AI returned no text:", JSON.stringify(cfResult).slice(0, 500));
+    } catch (error) {
+      console.error("Cloudflare Workers AI fallback failed:", String(error?.message || error).slice(0, 500));
+    }
   }
 
   let message;
@@ -297,7 +322,7 @@ export default {
         return json({ error: "The latest chat message must be from the user. Please send it again." }, 400);
       }
 
-      const result = await callGemini(systemInstruction, contents, env.GEMINI_API_KEY);
+      const result = await callGemini(systemInstruction, contents, env.GEMINI_API_KEY, env.AI);
       if (!result.ok) {
         return json({
           error: result.message,
