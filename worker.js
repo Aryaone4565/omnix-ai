@@ -137,10 +137,10 @@ async function searchWikipedia(query) {
 function cleanSearchQuery(query) {
   let q = String(query || "").trim();
   // Remove conversational wrappers that users often include when asking OMNIX to search.
-  q = q.replace(/^(?:hey\\s+omnix[,! ]*)?(?:i(?:'ll| will| want to| need you to)\\s+)?(?:please\\s+)?(?:can you\\s+)?(?:search(?:\\s+the\\s+web)?|browse(?:\\s+the\\s+web)?|look\\s+up|find\\s+online|check\\s+online)\\s+(?:for\\s+)?/i, "");
-  q = q.replace(/^(?:the\\s+)?(?:latest|current|recent|today'?s?)\\s+/i, "");
+  q = q.replace(/^(?:hey\s+omnix[,! ]*)?(?:i(?:'ll| will| want to| need you to)\s+)?(?:please\s+)?(?:can you\s+)?(?:search(?:\s+the\s+web)?|browse(?:\s+the\s+web)?|look\s+up|find\s+online|check\s+online)\s+(?:for\s+)?/i, "");
+  q = q.replace(/^(?:the\s+)?(?:latest|current|recent|today'?s?)\s+/i, "");
   // Keep only the requested topic, not the explanation that follows it.
-  q = q.split(/\\s+(?:based on the information|here is what|please note|if you'?re looking|i can suggest)\\b/i)[0];
+  q = q.split(/\s+(?:based on the information|here is what|please note|if you'?re looking|i can suggest)\b/i)[0];
   q = q.replace(/[.!?]+$/, "").trim();
   return q.slice(0, 300) || String(query || "").slice(0, 300);
 }
@@ -211,7 +211,7 @@ async function searchWeb(env, query) {
     }
   } else errors.push("Cloudflare search binding unavailable");
 
-  const isNewsQuery = /\\b(news|latest|current|recent|today|breaking|updates|launch|mission|achievement)\\b/i.test(String(query || ""));
+  const isNewsQuery = /\b(news|latest|current|recent|today|breaking|updates|launch|mission|achievement)\b/i.test(String(query || ""));
   // For news, prioritize a news index; Wikipedia can otherwise win the race with stale or unrelated pages.
   const providers = isNewsQuery
     ? [["Google News RSS", () => searchGoogleNewsRSS(searchQuery)], ["DuckDuckGo", () => searchDuckDuckGo(searchQuery)]]
