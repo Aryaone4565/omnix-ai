@@ -1,6 +1,7 @@
 const ALLOWED_ORIGIN = "https://aryaone4565.github.io";
 const MODEL = "gemini-3.5-flash-lite";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const FALLBACK_MODEL = "gemini-3.8-flash";
+const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
 
@@ -86,69 +87,72 @@ function normalizeMessages(body, fallbackMessage) {
 }
 
 async function callGemini(systemInstruction, contents, apiKey) {
+  const models = [MODEL, FALLBACK_MODEL];
   let lastStatus = 502;
   let lastError = "Unknown Gemini API error.";
+  let lastModel = MODEL;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    let response;
-    let data = {};
+  for (const model of models) {
+    lastModel = model;
+    // Retry transient errors twice on each model. If the primary model is
+    // overloaded (503), automatically try the stable fallback model.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let response;
+      let data = {};
 
-    try {
-      response = await fetch(GEMINI_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": apiKey
-        },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          generationConfig: { maxOutputTokens: 2048 }
-        }),
-        signal: AbortSignal.timeout(25_000)
-      });
+      try {
+        response = await fetch(GEMINI_URL(model), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey
+          },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+            contents,
+            generationConfig: { maxOutputTokens: 2048 }
+          }),
+          signal: AbortSignal.timeout(25_000)
+        });
+        data = await response.json().catch(() => ({}));
+      } catch (error) {
+        lastStatus = 502;
+        lastError = String(error?.message || error);
+        if (attempt === 0) {
+          await wait(500);
+          continue;
+        }
+        console.error("Gemini network/timeout error:", lastError);
+        break;
+      }
 
-      data = await response.json().catch(() => ({}));
-    } catch (error) {
-      lastStatus = 502;
-      lastError = String(error?.message || error);
-      if (attempt < 2) {
-        await wait(600 * (2 ** attempt));
+      if (response.ok) {
+        const answer = (data.candidates?.[0]?.content?.parts || [])
+          .map(part => part.text || "")
+          .join("")
+          .trim();
+
+        if (answer) return { ok: true, answer, model };
+        lastStatus = 502;
+        lastError = "The model returned no text.";
+        break;
+      }
+
+      lastStatus = response.status;
+      lastError = String(data?.error?.message || data?.error?.status || "No error details returned");
+      console.error("Gemini API error:", model, lastStatus, JSON.stringify(data?.error || {}).slice(0, 700));
+
+      // Retry temporary server errors and rate limits; don't retry invalid requests.
+      if (![408, 429, 500, 502, 503, 504].includes(response.status)) break;
+      if (attempt === 0) {
+        await wait(500);
         continue;
       }
-      console.error("Gemini network/timeout error:", lastError);
-      return {
-        ok: false,
-        status: lastStatus,
-        message: "OMNIX could not reach Google's AI service. Check the connection and try again."
-      };
+      break;
     }
 
-    if (response.ok) {
-      const answer = (data.candidates?.[0]?.content?.parts || [])
-        .map(part => part.text || "")
-        .join("")
-        .trim();
-
-      if (!answer) {
-        console.error("Gemini returned no text:", JSON.stringify(data).slice(0, 700));
-        return {
-          ok: false,
-          status: 502,
-          message: "The AI model returned no text. Please try again."
-        };
-      }
-
-      return { ok: true, answer };
-    }
-
-    lastStatus = response.status;
-    lastError = String(data?.error?.message || data?.error?.status || "No error details returned");
-    console.error("Gemini API error:", lastStatus, JSON.stringify(data?.error || {}).slice(0, 700));
-
-    // Retry only transient errors. Do not retry invalid keys or model IDs.
-    if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 2) break;
-    await wait(600 * (2 ** attempt));
+    // Only switch models for a temporary upstream outage/overload.
+    if (lastStatus !== 503 && lastStatus !== 502 && lastStatus !== 504) break;
   }
 
   let message;
@@ -159,12 +163,12 @@ async function callGemini(systemInstruction, contents, apiKey) {
   } else if (lastStatus === 429) {
     message = "The Google API rate limit or quota was reached. Try again later or check your API quota.";
   } else if (lastStatus >= 500) {
-    message = "Google's AI service returned HTTP " + lastStatus + " after retries. Try again shortly; the detailed error is in Worker logs.";
+    message = "Google's AI service returned HTTP " + lastStatus + " after retries on the primary and fallback models. Try again shortly; the detailed error is in Worker logs.";
   } else {
     message = "Google's AI request failed (HTTP " + lastStatus + "). Check Worker logs for details.";
   }
 
-  return { ok: false, status: 502, message, upstreamStatus: lastStatus, upstreamMessage: lastError };
+  return { ok: false, status: 502, message, upstreamStatus: lastStatus, upstreamMessage: lastError, model: lastModel };
 }
 
 export default {
@@ -297,13 +301,13 @@ export default {
       if (!result.ok) {
         return json({
           error: result.message,
-          model: MODEL,
+          model: result.model || MODEL,
           upstreamStatus: result.upstreamStatus,
           diagnostic: result.upstreamMessage
         }, result.status);
       }
 
-      return json({ reply: result.answer, model: MODEL });
+      return json({ reply: result.answer, model: result.model || MODEL });
     } catch (error) {
       console.error("OMNIX database or request error:", String(error?.stack || error));
       return json({ error: "OMNIX encountered a database or server error. Check the latest Worker logs." }, 500);
