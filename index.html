@@ -21,6 +21,11 @@ h1 { font-size: 32px; margin-bottom: 10px; }
 .message { padding: 14px 16px; border-radius: 15px; margin: 12px 0; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .user { background: #24243a; margin-left: 12%; }
 .assistant { background: #14171e; border: 1px solid #292d35; margin-right: 5%; }
+.sources { margin-top: 12px; padding-top: 10px; border-top: 1px solid #292d35; font-size: 13px; }
+.sources-title { color: #a78bfa; font-weight: bold; margin-bottom: 6px; }
+.sources a { display: block; color: #7dd3fc; text-decoration: none; overflow-wrap: anywhere; margin: 6px 0; }
+.sources a:hover { text-decoration: underline; }
+.search-note { margin-top: 8px; color: #fbbf24; font-size: 12px; }
 footer { padding: 14px; border-top: 1px solid #252832; }
 .composer { max-width: 700px; margin: auto; display: flex; gap: 10px; background: #151821; border: 1px solid #343846; border-radius: 16px; padding: 8px; }
 textarea { flex: 1; min-width: 0; resize: none; height: 45px; max-height: 120px; background: transparent; color: white; border: none; outline: none; padding: 12px 8px; font: inherit; }
@@ -92,6 +97,35 @@ function addMessage(text, type) {
   return message;
 }
 
+function renderSources(messageElement, sources, searchUnavailable) {
+  if (Array.isArray(sources) && sources.length) {
+    const panel = document.createElement("div");
+    panel.className = "sources";
+    const heading = document.createElement("div");
+    heading.className = "sources-title";
+    heading.textContent = "🌐 Web sources";
+    panel.appendChild(heading);
+    sources.forEach((source, index) => {
+      try {
+        const url = new URL(source.url);
+        if (!["https:", "http:"].includes(url.protocol)) return;
+        const link = document.createElement("a");
+        link.href = url.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = (index + 1) + ". " + (source.title || url.hostname);
+        panel.appendChild(link);
+      } catch {}
+    });
+    messageElement.appendChild(panel);
+  } else if (searchUnavailable) {
+    const note = document.createElement("div");
+    note.className = "search-note";
+    note.textContent = "⚠️ Live web search is currently unavailable. This answer may not include current information.";
+    messageElement.appendChild(note);
+  }
+}
+
 async function submitMessage() {
   const text = input.value.trim();
   if (!text || send.disabled) return;
@@ -120,6 +154,7 @@ async function submitMessage() {
     }
 
     pending.textContent = data.reply;
+    renderSources(pending, data.sources, data.webSearchUnavailable);
     conversation.push({ role: "assistant", content: data.reply });
     statusLabel.textContent = "● AI ONLINE";
   } catch (error) {
