@@ -92,7 +92,7 @@ async function searchDuckDuckGo(query) {
       "Accept": "text/html,application/xhtml+xml",
       "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0; web search)"
     },
-    signal: AbortSignal.timeout(9000)
+    signal: AbortSignal.timeout(4500)
   });
   if (!response.ok) throw new Error("DuckDuckGo returned HTTP " + response.status);
   const html = await response.text();
@@ -119,7 +119,7 @@ async function searchWikipedia(query) {
     encodeURIComponent(query.slice(0, 300)) + "&limit=5&namespace=0&format=json";
   const response = await fetch(url, {
     headers: { "Accept": "application/json", "User-Agent": "OMNIX/1.0 (personal AI assistant)" },
-    signal: AbortSignal.timeout(7000)
+    signal: AbortSignal.timeout(3500)
   });
   if (!response.ok) throw new Error("Wikipedia search returned HTTP " + response.status);
   const data = await response.json();
@@ -161,7 +161,7 @@ async function searchGoogleNewsRSS(query) {
     encodeURIComponent(query.slice(0, 300)) + "&hl=en-IN&gl=IN&ceid=IN:en";
   const response = await fetch(url, {
     headers: { "Accept": "application/rss+xml, application/xml, text/xml", "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0)" },
-    signal: AbortSignal.timeout(9000)
+    signal: AbortSignal.timeout(4500)
   });
   if (!response.ok) throw new Error("Google News RSS returned HTTP " + response.status);
   const xml = await response.text();
@@ -185,76 +185,52 @@ async function searchWeb(env, query) {
   const errors = [];
   if (env.AI && typeof env.AI.websearch === "function") {
     try {
-      const response = await env.AI.websearch({
-        gatewayId: "default",
-        query: searchQuery.slice(0, 1024),
-        provider: "exa",
-        limit: 5
-      });
-      if (!response.ok) {
-        const details = await response.text().catch(() => "");
-        console.error("OMNIX web search HTTP error:", response.status, details.slice(0, 400));
-        errors.push("Cloudflare search HTTP " + response.status);
-      } else {
+      const response = await Promise.race([
+        env.AI.websearch({ gatewayId: "default", query: searchQuery.slice(0, 1024), provider: "exa", limit: 5 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("search timed out after 2.5s")), 2500))
+      ]);
+      if (response.ok) {
         const data = await response.json();
-        const items = Array.isArray(data.items) ? data.items :
-          Array.isArray(data.results) ? data.results : [];
-        const sources = items
-          .filter(item => item && typeof (item.url || item.link) === "string" && /^https?:\/\//i.test(item.url || item.link))
-          .slice(0, 5)
-          .map(item => ({
+        const items = Array.isArray(data.items) ? data.items : Array.isArray(data.results) ? data.results : [];
+        const sources = items.filter(item => item && typeof (item.url || item.link) === "string" && /^https?:\/\//i.test(item.url || item.link))
+          .slice(0, 5).map(item => ({
             title: String(item.title || item.name || item.url || item.link).slice(0, 240),
             url: item.url || item.link,
             description: String(item.description || item.snippet || "").slice(0, 700)
           }));
         if (sources.length) return { ok: true, sources, error: "" };
         errors.push("Cloudflare search returned no usable results");
+      } else {
+        errors.push("Cloudflare search HTTP " + response.status);
+        console.error("OMNIX web search HTTP error:", response.status);
       }
     } catch (error) {
-      errors.push("Cloudflare search: " + String(error?.message || error).slice(0, 180));
+      errors.push("Cloudflare search: " + String(error?.message || error).slice(0, 120));
       console.error("OMNIX Cloudflare search failed:", errors[errors.length - 1]);
     }
-  } else {
-    errors.push("Cloudflare search binding unavailable");
-  }
+  } else errors.push("Cloudflare search binding unavailable");
 
+  const providers = [
+    ["Google News RSS", () => searchGoogleNewsRSS(searchQuery)],
+    ["DuckDuckGo", () => searchDuckDuckGo(searchQuery)],
+    ["Wikipedia", () => searchWikipedia(searchQuery)]
+  ];
+  const attempts = providers.map(([name, run]) => run().then(sources => {
+    if (!sources.length) throw new Error(name + " returned no usable results");
+    return { ok: true, sources, provider: name };
+  }).catch(error => {
+    const message = name + ": " + String(error?.message || error).slice(0, 120);
+    errors.push(message);
+    console.error("OMNIX search fallback failed:", message);
+    throw error;
+  }));
   try {
-    const sources = await searchGoogleNewsRSS(searchQuery);
-    if (sources.length) {
-      console.log("OMNIX web search used Google News RSS fallback.");
-      return { ok: true, sources, error: "" };
-    }
-    errors.push("Google News RSS returned no usable results");
-  } catch (error) {
-    errors.push("Google News RSS: " + String(error?.message || error).slice(0, 180));
-    console.error("OMNIX Google News RSS fallback failed:", errors[errors.length - 1]);
+    const result = await Promise.any(attempts);
+    console.log("OMNIX web search used " + result.provider + ".");
+    return { ok: true, sources: result.sources, error: "" };
+  } catch {
+    return { ok: false, sources: [], error: errors.join("; ").slice(0, 500) || "No search provider is available." };
   }
-
-  try {
-    const sources = await searchDuckDuckGo(searchQuery);
-    if (sources.length) {
-      console.log("OMNIX web search used DuckDuckGo fallback.");
-      return { ok: true, sources, error: "" };
-    }
-    errors.push("DuckDuckGo returned no usable results");
-  } catch (error) {
-    errors.push("DuckDuckGo: " + String(error?.message || error).slice(0, 180));
-    console.error("OMNIX DuckDuckGo fallback failed:", errors[errors.length - 1]);
-  }
-
-  try {
-    const sources = await searchWikipedia(searchQuery);
-    if (sources.length) {
-      console.log("OMNIX web search used Wikipedia fallback.");
-      return { ok: true, sources, error: "" };
-    }
-    errors.push("Wikipedia returned no usable results");
-  } catch (error) {
-    errors.push("Wikipedia: " + String(error?.message || error).slice(0, 180));
-    console.error("OMNIX Wikipedia fallback failed:", errors[errors.length - 1]);
-  }
-
-  return { ok: false, sources: [], error: errors.join("; ").slice(0, 500) || "No search provider is available." };
 }
 function normalizeMessages(body, fallbackMessage) {
   const source = Array.isArray(body.messages) ? body.messages.slice(-16) : [];
