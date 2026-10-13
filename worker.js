@@ -526,15 +526,15 @@ export default {
         search = await searchWeb(env, message);
         if (search.ok) {
           const sourceContext = search.sources.map((item, index) =>
-            "[" + (index + 1) + "] " + item.title + "\\nURL: " + item.url + "\\nDescription: " + item.description
-          ).join("\\n\\n");
+            "[" + (index + 1) + "] " + item.title + "\nURL: " + item.url + "\nDescription: " + item.description
+          ).join("\n\n");
           systemInstruction +=
-            "\\n\\nLIVE WEB SEARCH RESULTS (retrieved for the user's latest request):\\n" +
+            "\n\nLIVE WEB SEARCH RESULTS (retrieved for the user's latest request):\n" +
             sourceContext +
-            "\\nUse these results as evidence for current facts. Cite sources in your answer using their exact URLs or titles. Do not claim details that the results do not support.";
+            "\nUse these results as evidence for current facts. Cite sources in your answer using their exact URLs or titles. Do not claim details that the results do not support.";
         } else {
           systemInstruction +=
-            "\\n\\nThe user requested web search, but the live search request failed (" + search.error +
+            "\n\nThe user requested web search, but the live search request failed (" + search.error +
             "). Do not claim that you searched the web or present time-sensitive claims as verified. Tell the user briefly that live search is currently unavailable.";
         }
       }
