@@ -271,7 +271,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
     lastModel = model;
     // Retry transient errors twice on each model. If the primary model is
     // overloaded (503), automatically try the stable fallback model.
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 1; attempt++) {
       let response;
       let data = {};
 
@@ -287,7 +287,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
             contents,
             generationConfig: { maxOutputTokens: 2048 }
           }),
-          signal: AbortSignal.timeout(25_000)
+          signal: AbortSignal.timeout(12_000)
         });
         data = await response.json().catch(() => ({}));
       } catch (error) {
