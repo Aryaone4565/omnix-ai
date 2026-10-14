@@ -1,6 +1,6 @@
 const ALLOWED_ORIGIN = "https://aryaone4565.github.io";
 const MODEL = "gemini-3.5-flash-lite";
-const FALLBACK_MODEL = "gemini-3.8-flash";
+const FALLBACK_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. You normally use Google Gemini, and Cloudflare Workers AI may answer when Gemini is unavailable. Do not misrepresent which provider answered. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
@@ -49,6 +49,45 @@ function isRateLimited(key) {
     }
   }
   return false;
+}
+
+// Persistent daily limits: 1,000 AI messages per browser ID and a 400-request
+// daily Gemini safety cap, leaving headroom below the model's 500 RPD quota.
+async function consumeDailyQuota(db, userId) {
+  try {
+    await db.prepare(
+      "CREATE TABLE IF NOT EXISTS omnix_daily_usage (usage_day TEXT NOT NULL, user_id TEXT NOT NULL, request_count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (usage_day, user_id))"
+    ).run();
+
+    const day = new Date().toISOString().slice(0, 10);
+    const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+    await db.prepare("DELETE FROM omnix_daily_usage WHERE usage_day < ?").bind(cutoff).run();
+
+    const userUsage = await db.prepare(
+      "INSERT INTO omnix_daily_usage (usage_day, user_id, request_count) VALUES (?, ?, 1) " +
+      "ON CONFLICT(usage_day, user_id) DO UPDATE SET request_count = request_count + 1 " +
+      "WHERE request_count < 1000 RETURNING request_count"
+    ).bind(day, userId).first();
+
+    if (!userUsage) return { userAllowed: false, geminiAllowed: false, trackingAvailable: true };
+
+    const globalUsage = await db.prepare(
+      "INSERT INTO omnix_daily_usage (usage_day, user_id, request_count) VALUES (?, '__global_gemini__', 1) " +
+      "ON CONFLICT(usage_day, user_id) DO UPDATE SET request_count = request_count + 1 " +
+      "WHERE request_count < 400 RETURNING request_count"
+    ).bind(day).first();
+
+    return {
+      userAllowed: true,
+      geminiAllowed: Boolean(globalUsage),
+      trackingAvailable: true,
+      userRequestsToday: userUsage.request_count
+    };
+  } catch (error) {
+    // Keep OMNIX usable if quota tracking has a temporary D1 problem.
+    console.error("OMNIX daily quota tracking unavailable; allowing request:", String(error?.message || error));
+    return { userAllowed: true, geminiAllowed: true, trackingAvailable: false };
+  }
 }
 
 function getMessageText(body) {
@@ -453,10 +492,10 @@ function normalizeMessages(body, fallbackMessage) {
   return contents;
 }
 
-async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
-  const models = [MODEL, FALLBACK_MODEL];
-  let lastStatus = 502;
-  let lastError = "Unknown Gemini API error.";
+async function callGemini(systemInstruction, contents, apiKey, cloudflareAI, skipGemini = false) {
+  const models = skipGemini ? [] : [MODEL, FALLBACK_MODEL];
+  let lastStatus = skipGemini ? 429 : 502;
+  let lastError = skipGemini ? "Daily Gemini safety cap reached; routing to Cloudflare Workers AI." : "Unknown Gemini API error.";
   let lastModel = MODEL;
   let fallbackError = "";
 
@@ -464,7 +503,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
     lastModel = model;
     // Retry transient errors twice on each model. If the primary model is
     // overloaded (503), automatically try the stable fallback model.
-    for (let attempt = 0; attempt < 1; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       let response;
       let data = {};
 
@@ -506,13 +545,18 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
       lastError = String(data?.error?.message || data?.error?.status || "No error details returned");
       console.error("Gemini API error:", model, lastStatus, JSON.stringify(data?.error || {}).slice(0, 700));
 
-      // Retry temporary server errors and rate limits; don't retry invalid requests.
+      // Retry transient server errors once. A 429 moves to the alternate model.
       if (![408, 429, 500, 502, 503, 504].includes(response.status)) break;
+      if (response.status === 429) break;
+      if (attempt === 0) {
+        await wait(250);
+        continue;
+      }
       break;
     }
 
     // A 429 can be model-specific. Briefly try the alternate model too, then use Workers AI.
-    if (![429, 502, 503, 504].includes(lastStatus)) break;
+    if (![408, 429, 502, 503, 504].includes(lastStatus)) break;
   }
 
   // Independent fallback: Cloudflare Workers AI, if the AI binding is configured.
@@ -580,7 +624,7 @@ export default {
         model: MODEL,
         creator: "Arya Gupta",
         createdYear: 2026,
-        version: "2026-10-14-quota-aware-fallback",
+        version: "2026-10-14-daily-quota-fallback-v2",
         currentDate: new Date().toISOString().slice(0, 10),
         memoryEnabled: Boolean(env.OMNIX_DB)
       });
@@ -691,6 +735,13 @@ export default {
         return json({ error: "The latest chat message must be from the user. Please send it again." }, 400);
       }
 
+      const quota = await consumeDailyQuota(env.OMNIX_DB, userId);
+      if (!quota.userAllowed) {
+        return json({
+          error: "You've reached OMNIX's limit of 1,000 AI messages for this browser today. Please try again tomorrow."
+        }, 429);
+      }
+
       let search = { ok: false, sources: [], provider: "", error: "" };
       if (shouldSearchWeb(message)) {
         search = await searchWeb(env, message);
@@ -710,7 +761,7 @@ export default {
         }
       }
 
-      const result = await callGemini(systemInstruction, contents, env.GEMINI_API_KEY, env.AI);
+      const result = await callGemini(systemInstruction, contents, env.GEMINI_API_KEY, env.AI, !quota.geminiAllowed);
       if (!result.ok) {
         return json({
           error: result.message,
