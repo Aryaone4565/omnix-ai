@@ -1,6 +1,6 @@
 const ALLOWED_ORIGIN = "https://aryaone4565.github.io";
-const MODEL = "gemini-3.5-flash-lite";
-const FALLBACK_MODEL = "gemini-3.8-flash";
+const MODEL = "gemini-3.8-flash";
+const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
@@ -325,43 +325,54 @@ async function searchCloudflareWeb(env, query) {
 }
 
 async function searchWeb(env, query) {
+  const startedAt = Date.now();
   const cleanedQuery = cleanSearchQuery(query);
   const newsRequest = isNewsQueryText(query);
   const isroRequest = isIsroQuery(query);
   const providers = [];
 
+  // Exa via Cloudflare returned HTTP 402 previously and could leave a slow,
+  // non-cancellable operation behind. Prefer bounded public sources instead.
   if (isroRequest) providers.push(["Official ISRO", () => searchIsroOfficial()]);
   if (newsRequest) {
     providers.push(["Google News RSS", () => searchGoogleNewsRSS(query)]);
     providers.push(["DuckDuckGo", () => searchDuckDuckGo(cleanedQuery)]);
-    providers.push(["Cloudflare Web Search", () => searchCloudflareWeb(env, query)]);
   } else {
     providers.push(["DuckDuckGo", () => searchDuckDuckGo(cleanedQuery)]);
     providers.push(["Wikipedia", () => searchWikipedia(cleanedQuery)]);
     providers.push(["Google News RSS", () => searchGoogleNewsRSS(cleanedQuery)]);
-    providers.push(["Cloudflare Web Search", () => searchCloudflareWeb(env, query)]);
   }
 
-  const settled = await Promise.allSettled(providers.map(async ([name, run]) => ({
-    name,
-    sources: await run()
-  })));
+  const guardedRuns = providers.map(([name, run]) => Promise.race([
+    Promise.resolve().then(run).then(sources => ({ name, sources })),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(name + " exceeded 4.6s")), 4600))
+  ]));
+  const settled = await Promise.race([
+    Promise.allSettled(guardedRuns),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Global web search exceeded 5.2s")), 5200))
+  ]).catch(error => {
+    console.error("OMNIX global search deadline:", String(error?.message || error));
+    return null;
+  });
+
   const errors = [];
   const candidates = [];
-  for (let index = 0; index < settled.length; index++) {
-    const result = settled[index];
-    const name = providers[index][0];
-    if (result.status === "rejected") {
-      const message = name + ": " + String(result.reason?.message || result.reason).slice(0, 120);
-      errors.push(message);
-      console.error("OMNIX search provider failed:", message);
-      continue;
-    }
-    for (const source of result.value.sources || []) {
-      if (!source?.title || !source?.url) continue;
-      const score = searchRelevance(source, query, newsRequest, isroRequest);
-      if (score < 0) continue;
-      candidates.push({ ...source, publishedAt: parsedDate(source.publishedAt), _score: score, _provider: name });
+  if (settled) {
+    for (let index = 0; index < settled.length; index++) {
+      const result = settled[index];
+      const name = providers[index][0];
+      if (result.status === "rejected") {
+        const message = name + ": " + String(result.reason?.message || result.reason).slice(0, 120);
+        errors.push(message);
+        console.error("OMNIX search provider failed:", message);
+        continue;
+      }
+      for (const source of result.value.sources || []) {
+        if (!source?.title || !source?.url) continue;
+        const score = searchRelevance(source, query, newsRequest, isroRequest);
+        if (score < 0) continue;
+        candidates.push({ ...source, publishedAt: parsedDate(source.publishedAt), _score: score, _provider: name });
+      }
     }
   }
 
@@ -390,12 +401,21 @@ async function searchWeb(env, query) {
     if (sources.length >= 5) break;
   }
 
+  const elapsedMs = Date.now() - startedAt;
   if (sources.length) {
     const usedProviders = [...new Set(sources.map(source => source.provider))].join(", ");
-    console.log("OMNIX web search succeeded:", usedProviders, "|", cleanedQuery, "|", sources.length, "relevant results");
-    return { ok: true, sources, provider: usedProviders, error: "" };
+    console.log("OMNIX search succeeded:", usedProviders, "|", cleanedQuery, "|", sources.length, "relevant results |", elapsedMs, "ms");
+    return { ok: true, sources, provider: usedProviders, error: "", elapsedMs };
   }
-  return { ok: false, sources: [], provider: "", error: errors.join("; ").slice(0, 500) || "No sufficiently relevant search results were found." };
+
+  console.log("OMNIX search returned no relevant results in", elapsedMs, "ms");
+  return {
+    ok: false,
+    sources: [],
+    provider: "",
+    error: errors.join("; ").slice(0, 500) || "No sufficiently relevant search results were found.",
+    elapsedMs
+  };
 }
 
 function normalizeMessages(body, fallbackMessage) {
@@ -451,18 +471,14 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: systemInstruction }] },
             contents,
-            generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: model === MODEL ? "minimal" : "low" } }
+            generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: model === MODEL ? "low" : "minimal" } }
           }),
-          signal: AbortSignal.timeout(model === MODEL ? 9_000 : 7_000)
+          signal: AbortSignal.timeout(model === MODEL ? 7_500 : 6_000)
         });
         data = await response.json().catch(() => ({}));
       } catch (error) {
         lastStatus = 502;
         lastError = String(error?.message || error);
-        if (attempt === 0) {
-          await wait(500);
-          continue;
-        }
         console.error("Gemini network/timeout error:", lastError);
         break;
       }
@@ -485,10 +501,6 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
 
       // Retry temporary server errors and rate limits; don't retry invalid requests.
       if (![408, 429, 500, 502, 503, 504].includes(response.status)) break;
-      if (attempt === 0) {
-        await wait(500);
-        continue;
-      }
       break;
     }
 
@@ -506,10 +518,10 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
           content: (item.parts || []).map(part => part.text || "").join("")
         }))
       ];
-      const cfResult = await cloudflareAI.run("@cf/meta/llama-3.1-8b-instruct-fp8", {
-        messages,
-        max_tokens: 2048
-      });
+      const cfResult = await Promise.race([
+        cloudflareAI.run("@cf/meta/llama-3.1-8b-instruct-fp8", { messages, max_tokens: 1024 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Workers AI fallback exceeded 5s")), 5000))
+      ]);
       const cfAnswer = String(cfResult?.response || cfResult?.choices?.[0]?.message?.content || "").trim();
       if (cfAnswer) {
         console.log("OMNIX used Cloudflare Workers AI fallback.");
@@ -557,7 +569,7 @@ export default {
         model: MODEL,
         creator: "Arya Gupta",
         createdYear: 2026,
-        version: "2026-10-14-search-relevance-and-speed",
+        version: "2026-10-14-bounded-search-fast-model",
         currentDate: new Date().toISOString().slice(0, 10),
         memoryEnabled: Boolean(env.OMNIX_DB)
       });
@@ -702,6 +714,7 @@ export default {
         model: result.model || MODEL,
         sources: search.sources,
         searchProvider: search.provider,
+        searchLatencyMs: search.elapsedMs || 0,
         latencyMs: Date.now() - requestStartedAt,
         webSearchUsed: search.ok,
         webSearchUnavailable: shouldSearchWeb(message) && !search.ok
