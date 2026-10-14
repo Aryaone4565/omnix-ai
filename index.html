@@ -163,7 +163,8 @@ async function submitMessage() {
     pending.textContent = data.reply;
     renderSources(pending, data.sources, data.webSearchUnavailable);
     conversation.push({ role: "assistant", content: data.reply });
-    statusLabel.textContent = "● AI ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
+    const providerLabel = String(data.model || "").startsWith("cloudflare:") ? "BACKUP AI" : "GEMINI";
+    statusLabel.textContent = "● " + providerLabel + " ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
   } catch (error) {
     pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + (error.message || "Network error") + ")";
     statusLabel.textContent = "● CONNECTION ISSUE";
