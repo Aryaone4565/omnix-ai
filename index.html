@@ -25,6 +25,7 @@ h1 { font-size: 32px; margin-bottom: 10px; }
 .sources-title { color: #a78bfa; font-weight: bold; margin-bottom: 6px; }
 .sources a { display: block; color: #7dd3fc; text-decoration: none; overflow-wrap: anywhere; margin: 6px 0; }
 .sources a:hover { text-decoration: underline; }
+.source-meta { display:block; color:#71717a; font-size:11px; margin:0 0 10px 0; overflow-wrap:anywhere; }
 .search-note { margin-top: 8px; color: #fbbf24; font-size: 12px; }
 footer { padding: 14px; border-top: 1px solid #252832; }
 .composer { max-width: 700px; margin: auto; display: flex; gap: 10px; background: #151821; border: 1px solid #343846; border-radius: 16px; padding: 8px; }
@@ -115,6 +116,11 @@ function renderSources(messageElement, sources, searchUnavailable) {
         link.rel = "noopener noreferrer";
         link.textContent = (index + 1) + ". " + (source.title || url.hostname);
         panel.appendChild(link);
+        const meta = document.createElement("span");
+        meta.className = "source-meta";
+        const published = source.publishedAt ? new Date(source.publishedAt).toLocaleDateString() : "";
+        meta.textContent = [url.hostname, published].filter(Boolean).join(" · ");
+        panel.appendChild(meta);
       } catch {}
     });
     messageElement.appendChild(panel);
@@ -142,7 +148,8 @@ async function submitMessage() {
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, messages: conversation.slice(-20) })
+      body: JSON.stringify({ userId, messages: conversation.slice(-20) }),
+      signal: AbortSignal.timeout(35000)
     });
 
     const data = await response.json().catch(() => ({}));
@@ -156,7 +163,7 @@ async function submitMessage() {
     pending.textContent = data.reply;
     renderSources(pending, data.sources, data.webSearchUnavailable);
     conversation.push({ role: "assistant", content: data.reply });
-    statusLabel.textContent = "● AI ONLINE";
+    statusLabel.textContent = "● AI ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
   } catch (error) {
     pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + (error.message || "Network error") + ")";
     statusLabel.textContent = "● CONNECTION ISSUE";
