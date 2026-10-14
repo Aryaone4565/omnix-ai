@@ -67,12 +67,16 @@ jobs:
             "messages": [{"role": "user", "content": "Search the web for the latest ISRO news. Summarize only verified updates and mention dates."}]
           }))
           PY
-          curl --silent --show-error --fail --max-time 42 \
-            -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" \
-            --data-binary @/tmp/search.json "$OMNIX_URL" -o /tmp/search-response.json
+          status=$(curl --silent --show-error --max-time 35 -w "%{http_code}" \\
+            -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" \\
+            --data-binary @/tmp/search.json "$OMNIX_URL" -o /tmp/search-response.json)
+          echo "Search HTTP status: $status"
+          cat /tmp/search-response.json
           python3 - <<'PY'
           import json, re, urllib.parse
           data = json.load(open("/tmp/search-response.json"))
+          if "error" in data:
+            raise SystemExit(json.dumps({k: data.get(k) for k in ("error", "model", "upstreamStatus", "diagnostic", "webSearchUnavailable", "searchLatencyMs", "latencyMs")}, indent=2))
           assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
           assert data.get("webSearchUsed") is True, {
             "webSearchUsed": data.get("webSearchUsed"),
