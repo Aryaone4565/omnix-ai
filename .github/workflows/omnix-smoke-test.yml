@@ -67,9 +67,7 @@ jobs:
             "messages": [{"role": "user", "content": "Search the web for the latest ISRO news. Summarize only verified updates and mention dates."}]
           }))
           PY
-          status=$(curl --silent --show-error --max-time 35 -w "%{http_code}" \\
-            -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" \\
-            --data-binary @/tmp/search.json "$OMNIX_URL" -o /tmp/search-response.json)
+          status=$(curl --silent --show-error --max-time 35 -w "%{http_code}" -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" --data-binary @/tmp/search.json "$OMNIX_URL" -o /tmp/search-response.json)
           echo "Search HTTP status: $status"
           cat /tmp/search-response.json
           python3 - <<'PY'
