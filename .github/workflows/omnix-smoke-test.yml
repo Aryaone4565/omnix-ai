@@ -30,7 +30,7 @@ jobs:
           assert data.get("status") == "OMNIX brain is online", data
           assert data.get("creator") == "Arya Gupta", data
           assert data.get("memoryEnabled") is True, data
-          assert data.get("version") == "2026-10-14-search-relevance-and-speed", data
+          assert data.get("version") == "2026-10-14-bounded-search-fast-model", data
           print("Health check passed:", {k: data.get(k) for k in ("status", "model", "creator", "version", "currentDate", "memoryEnabled")})
           PY
 
@@ -87,8 +87,10 @@ jobs:
             assert not bad.search(combined), source
             host = urllib.parse.urlparse(source.get("url", "")).hostname or ""
             assert host.endswith("isro.gov.in") or re.search(r"\bISRO\b|Indian Space Research Organisation", combined, re.I), source
+          assert data.get("searchLatencyMs", 99999) <= 6000, data
           print("ISRO search passed:", {
             "latencyMs": data.get("latencyMs"),
+            "searchLatencyMs": data.get("searchLatencyMs"),
             "providers": data.get("searchProvider"),
             "sources": [{"title": s.get("title"), "publishedAt": s.get("publishedAt"), "url": s.get("url")} for s in sources],
           })
