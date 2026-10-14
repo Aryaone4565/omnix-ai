@@ -139,6 +139,7 @@ function cleanSearchQuery(query) {
   let q = original.replace(/^(?:hey\s+omnix[,! ]*)?/i, "");
   q = q.replace(/^(?:i(?:'ll| will| want to| need you to)\s+)?(?:please\s+)?(?:can you\s+)?(?:search(?:\s+(?:the\s+)?web)?|browse(?:\s+(?:the\s+)?web)?|look\s+up|find\s+online|check\s+online)\s+(?:for\s+)?/i, "");
   q = q.replace(/^(?:tell me|show me|give me)\s+(?:about\s+)?/i, "");
+  q = q.split(/[.!?]\s+(?:summari[sz]e|please|only|include|mention|tell me|provide|explain|write|return)\b/i)[0];
   q = q.replace(/^(?:the\s+)?(?:latest|current|recent|newest|today'?s?|today)\s+/i, "");
   q = q.replace(/\b(?:latest|current|recent|breaking|today'?s?|right now|as of today)\b/ig, " ");
   q = q.replace(/\b(?:news|updates|articles|information|stories)\b/ig, " ");
@@ -214,54 +215,77 @@ function searchRelevance(item, query, newsRequest, isroRequest) {
   return score;
 }
 
-async function searchIsroOfficial() {
-  const pages = [
-    "https://www.isro.gov.in/",
-    "https://www.isro.gov.in/ISRO_EN/Press.html"
-  ];
-  const responses = await Promise.allSettled(pages.map(async pageUrl => {
-    const response = await fetch(pageUrl, {
-      headers: { "Accept": "text/html,application/xhtml+xml", "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0; official news search)" },
-      signal: AbortSignal.timeout(4200)
-    });
-    if (!response.ok) throw new Error("ISRO official page returned HTTP " + response.status);
-    return { pageUrl, html: await response.text() };
-  }));
-
-  const out = [];
-  const seen = new Set();
-  for (const result of responses) {
-    if (result.status !== "fulfilled") continue;
-    const page = result.value;
-    const anchors = [...page.html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
-    for (const match of anchors) {
-      const attributes = match[1] || "";
-      const href = attributes.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
-      if (!href) continue;
-      const title = stripHtml(match[2].replace(/<(?:script|style)\b[\s\S]*?<\/(?:script|style)>/gi, " "))
-        .replace(/\s+/g, " ").trim();
-      if (title.length < 16 || title.length > 220) continue;
-      if (/^(home|more info|read more|press release|press releases|careers|students|contact|menu|close|skip to|share|english|हिंदी)$/i.test(title)) continue;
-      if (/\b(careers?|tenders?|procurement|annual report|privacy policy|feedback|contact us|sitemap|login|register|downloads)\b/i.test(title)) continue;
-
-      let url;
-      try { url = new URL(decodeHtml(href), page.pageUrl); } catch { continue; }
-      if (!/^https?:$/.test(url.protocol) || !(url.hostname === "isro.gov.in" || url.hostname.endsWith(".isro.gov.in"))) continue;
-      if (url.pathname === "/" || /\/ISRO_EN\/Press\.html$/i.test(url.pathname)) continue;
-      if (seen.has(url.href)) continue;
-
-      const around = page.html.slice(Math.max(0, match.index - 500), Math.min(page.html.length, match.index + match[0].length + 500));
-      const dateText = around.match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b/i)?.[0] || "";
-      seen.add(url.href);
-      out.push({
-        title: title.slice(0, 240),
-        url: url.href,
-        description: "Published by the official Indian Space Research Organisation website.",
-        publishedAt: parsedDate(dateText)
-      });
+function extractPublishedDate(html) {
+  const metaTags = String(html || "").match(/<meta\b[^>]*>/gi) || [];
+  const preferred = /article:published_time|datepublished|dcterms\.created|dc\.date|publishdate|date_created|datecreated|article:modified_time|datemodified|og:updated_time/i;
+  for (const tag of metaTags) {
+    const key = tag.match(/\b(?:property|name|itemprop)\s*=\s*["']([^"']+)["']/i)?.[1] || "";
+    const value = tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i)?.[1] || "";
+    if (value && preferred.test(key)) {
+      const date = parsedDate(value);
+      if (date) return date;
     }
   }
-  return out.slice(0, 25);
+  const timeMatch = html.match(/<time\b[^>]*\bdatetime\s*=\s*["']([^"']+)["']/i);
+  if (timeMatch) {
+    const date = parsedDate(timeMatch[1]);
+    if (date) return date;
+  }
+  const jsonMatch = html.match(/["']datePublished["']\s*:\s*["']([^"']+)["']/i);
+  if (jsonMatch) return parsedDate(jsonMatch[1]);
+  return "";
+}
+
+async function enrichSourceDates(sources) {
+  const targets = sources.filter(item => !item.publishedAt && !/\.pdf(?:[?#]|$)/i.test(item.url)).slice(0, 5);
+  await Promise.allSettled(targets.map(async item => {
+    const response = await fetch(item.url, {
+      headers: { "Accept": "text/html,application/xhtml+xml", "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0; source date check)" },
+      signal: AbortSignal.timeout(1200)
+    });
+    if (!response.ok) return;
+    item.publishedAt = extractPublishedDate(await response.text());
+  }));
+  return sources;
+}
+
+async function searchIsroOfficial() {
+  const pageUrl = "https://www.isro.gov.in/";
+  const response = await fetch(pageUrl, {
+    headers: { "Accept": "text/html,application/xhtml+xml", "User-Agent": "Mozilla/5.0 (compatible; OMNIX/1.0; official news search)" },
+    signal: AbortSignal.timeout(2800)
+  });
+  if (!response.ok) throw new Error("ISRO official page returned HTTP " + response.status);
+  const html = await response.text();
+  const anchors = [...html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+  const out = [];
+  const seen = new Set();
+
+  for (const match of anchors) {
+    const href = (match[1] || "").match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+    if (!href) continue;
+    const title = stripHtml(match[2].replace(/<(?:script|style)\b[\s\S]*?<\/(?:script|style)>/gi, " "))
+      .replace(/\s+/g, " ").trim();
+    if (title.length < 16 || title.length > 220) continue;
+    if (/^(home|more info|read more|press release|press releases|careers|students|contact|menu|close|skip to|share|english|हिंदी)$/i.test(title)) continue;
+    if (/\b(careers?|tenders?|procurement|annual report|privacy policy|feedback|contact us|sitemap|login|register|downloads)\b/i.test(title)) continue;
+    let url;
+    try { url = new URL(decodeHtml(href), pageUrl); } catch { continue; }
+    if (!/^https?:$/.test(url.protocol) || !(url.hostname === "isro.gov.in" || url.hostname.endsWith(".isro.gov.in"))) continue;
+    if (url.pathname === "/" || seen.has(url.href)) continue;
+
+    const around = html.slice(Math.max(0, match.index - 1800), Math.min(html.length, match.index + match[0].length + 1800));
+    const dateText = around.match(/\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}\b|\b\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4}\b/i)?.[0] || "";
+    seen.add(url.href);
+    out.push({
+      title: title.slice(0, 240),
+      url: url.href,
+      description: "From the official Indian Space Research Organisation website.",
+      publishedAt: extractPublishedDate(around) || parsedDate(dateText)
+    });
+    if (out.length >= 25) break;
+  }
+  return out;
 }
 
 function xmlTag(item, tag) {
@@ -304,26 +328,6 @@ async function searchGoogleNewsRSS(query) {
   }).filter(item => item.title && /^https?:\/\//i.test(item.url));
 }
 
-async function searchCloudflareWeb(env, query) {
-  if (!env.AI || typeof env.AI.websearch !== "function") throw new Error("Cloudflare websearch binding unavailable");
-  const response = await Promise.race([
-    env.AI.websearch({ gatewayId: "default", query: cleanSearchQuery(query).slice(0, 1024), provider: "exa", limit: 8 }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Cloudflare web search timed out after 1800ms")), 1800))
-  ]);
-  if (!response.ok) throw new Error("Cloudflare search HTTP " + response.status);
-  const data = await response.json();
-  const items = Array.isArray(data.items) ? data.items : Array.isArray(data.results) ? data.results : [];
-  return items.map(item => {
-    const url = item && (item.url || item.link);
-    return {
-      title: String(item?.title || item?.name || url || "").slice(0, 240),
-      url: String(url || ""),
-      description: String(item?.description || item?.snippet || item?.text || "").slice(0, 700),
-      publishedAt: parsedDate(item?.publishedDate || item?.published_at || item?.date)
-    };
-  }).filter(item => item.title && /^https?:\/\//i.test(item.url));
-}
-
 async function searchWeb(env, query) {
   const startedAt = Date.now();
   const cleanedQuery = cleanSearchQuery(query);
@@ -331,8 +335,6 @@ async function searchWeb(env, query) {
   const isroRequest = isIsroQuery(query);
   const providers = [];
 
-  // Exa via Cloudflare returned HTTP 402 previously and could leave a slow,
-  // non-cancellable operation behind. Prefer bounded public sources instead.
   if (isroRequest) providers.push(["Official ISRO", () => searchIsroOfficial()]);
   if (newsRequest) {
     providers.push(["Google News RSS", () => searchGoogleNewsRSS(query)]);
@@ -343,44 +345,46 @@ async function searchWeb(env, query) {
     providers.push(["Google News RSS", () => searchGoogleNewsRSS(cleanedQuery)]);
   }
 
-  const guardedRuns = providers.map(([name, run]) => Promise.race([
-    Promise.resolve().then(run).then(sources => ({ name, sources })),
-    new Promise((_, reject) => setTimeout(() => reject(new Error(name + " exceeded 4.6s")), 4600))
+  const attempts = providers.map(([name, run]) => Promise.race([
+    Promise.resolve().then(run).then(rawSources => {
+      const ranked = (rawSources || [])
+        .filter(item => item && item.title && item.url)
+        .map(item => ({ ...item, _score: searchRelevance(item, query, newsRequest, isroRequest), _provider: name }))
+        .filter(item => item._score >= 0)
+        .sort((a, b) => {
+          const aDate = Date.parse(a.publishedAt || "") || 0;
+          const bDate = Date.parse(b.publishedAt || "") || 0;
+          if (newsRequest && aDate && bDate && aDate !== bDate) return bDate - aDate;
+          return b._score - a._score;
+        });
+      if (!ranked.length) throw new Error(name + " returned no relevant results");
+      return { name, ranked };
+    }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error(name + " timed out")),
+      name === "Official ISRO" ? 3000 : 4300
+    ))
   ]));
-  const settled = await Promise.race([
-    Promise.allSettled(guardedRuns),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Global web search exceeded 5.2s")), 5200))
-  ]).catch(error => {
-    console.error("OMNIX global search deadline:", String(error?.message || error));
-    return null;
-  });
 
+  let selected;
   const errors = [];
-  const candidates = [];
-  if (settled) {
-    for (let index = 0; index < settled.length; index++) {
-      const result = settled[index];
-      const name = providers[index][0];
-      if (result.status === "rejected") {
-        const message = name + ": " + String(result.reason?.message || result.reason).slice(0, 120);
-        errors.push(message);
-        console.error("OMNIX search provider failed:", message);
-        continue;
-      }
-      for (const source of result.value.sources || []) {
-        if (!source?.title || !source?.url) continue;
-        const score = searchRelevance(source, query, newsRequest, isroRequest);
-        if (score < 0) continue;
-        candidates.push({ ...source, publishedAt: parsedDate(source.publishedAt), _score: score, _provider: name });
-      }
-    }
+  try {
+    selected = await Promise.any(attempts);
+  } catch (error) {
+    const causes = Array.isArray(error?.errors) ? error.errors : [error];
+    errors.push(...causes.map(item => String(item?.message || item).slice(0, 120)));
   }
 
-  candidates.sort((a, b) => b._score - a._score);
+  if (!selected) {
+    const elapsedMs = Date.now() - startedAt;
+    console.log("OMNIX search found no relevant results:", cleanedQuery, "|", elapsedMs, "ms");
+    return { ok: false, sources: [], provider: "", error: errors.join("; ").slice(0, 500) || "No sufficiently relevant search results were found.", elapsedMs };
+  }
+
   const sources = [];
   const seenUrls = new Set();
   const seenTitles = new Set();
-  for (const item of candidates) {
+  for (const item of selected.ranked) {
     let normalizedUrl;
     try {
       const parsed = new URL(item.url);
@@ -395,27 +399,16 @@ async function searchWeb(env, query) {
       title: String(item.title).slice(0, 240),
       url: normalizedUrl,
       description: String(item.description || "").slice(0, 700),
-      publishedAt: item.publishedAt || "",
+      publishedAt: parsedDate(item.publishedAt),
       provider: item._provider
     });
     if (sources.length >= 5) break;
   }
 
+  if (selected.name === "Official ISRO") await enrichSourceDates(sources);
   const elapsedMs = Date.now() - startedAt;
-  if (sources.length) {
-    const usedProviders = [...new Set(sources.map(source => source.provider))].join(", ");
-    console.log("OMNIX search succeeded:", usedProviders, "|", cleanedQuery, "|", sources.length, "relevant results |", elapsedMs, "ms");
-    return { ok: true, sources, provider: usedProviders, error: "", elapsedMs };
-  }
-
-  console.log("OMNIX search returned no relevant results in", elapsedMs, "ms");
-  return {
-    ok: false,
-    sources: [],
-    provider: "",
-    error: errors.join("; ").slice(0, 500) || "No sufficiently relevant search results were found.",
-    elapsedMs
-  };
+  console.log("OMNIX search used", selected.name, "|", cleanedQuery, "|", sources.length, "sources |", elapsedMs, "ms");
+  return { ok: sources.length > 0, sources, provider: selected.name, error: sources.length ? "" : "No relevant results survived filtering.", elapsedMs };
 }
 
 function normalizeMessages(body, fallbackMessage) {
@@ -525,7 +518,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
       const cfAnswer = String(cfResult?.response || cfResult?.choices?.[0]?.message?.content || "").trim();
       if (cfAnswer) {
         console.log("OMNIX used Cloudflare Workers AI fallback.");
-        return { ok: true, answer: cfAnswer, model: "cloudflare:@cf/meta/llama-3.1-8b-instruct-fp8" };
+        return { ok: true, answer: cfAnswer, model: "cloudflare:@cf/meta/llama-3.1-8b-instruct-fp8", fallback: true, fallbackReason: lastError, upstreamStatus: lastStatus };
       }
       console.error("Cloudflare Workers AI returned no text:", JSON.stringify(cfResult).slice(0, 500));
     } catch (error) {
@@ -569,7 +562,7 @@ export default {
         model: MODEL,
         creator: "Arya Gupta",
         createdYear: 2026,
-        version: "2026-10-14-bounded-search-fast-model",
+        version: "2026-10-14-fast-official-search",
         currentDate: new Date().toISOString().slice(0, 10),
         memoryEnabled: Boolean(env.OMNIX_DB)
       });
@@ -715,6 +708,9 @@ export default {
         sources: search.sources,
         searchProvider: search.provider,
         searchLatencyMs: search.elapsedMs || 0,
+        fallbackUsed: Boolean(result.fallback),
+        fallbackReason: result.fallbackReason || "",
+        upstreamStatus: result.upstreamStatus || 0,
         latencyMs: Date.now() - requestStartedAt,
         webSearchUsed: search.ok,
         webSearchUnavailable: shouldSearchWeb(message) && !search.ok
