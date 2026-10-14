@@ -3,7 +3,7 @@ const MODEL = "gemini-3.8-flash";
 const FALLBACK_MODEL = "gemini-3.5-flash-lite";
 const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
+const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. You normally use Google Gemini, and Cloudflare Workers AI may answer when Gemini is unavailable. Do not misrepresent which provider answered. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
 
 const requestHits = new Map();
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -445,6 +445,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
   let lastStatus = 502;
   let lastError = "Unknown Gemini API error.";
   let lastModel = MODEL;
+  let fallbackError = "";
 
   for (const model of models) {
     lastModel = model;
@@ -466,7 +467,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
             contents,
             generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: model === MODEL ? "low" : "minimal" } }
           }),
-          signal: AbortSignal.timeout(model === MODEL ? 7_500 : 6_000)
+          signal: AbortSignal.timeout(model === MODEL ? 7_500 : (lastStatus === 429 ? 3_500 : 6_000))
         });
         data = await response.json().catch(() => ({}));
       } catch (error) {
@@ -497,8 +498,8 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
       break;
     }
 
-    // Only switch models for a temporary upstream outage/overload.
-    if (lastStatus !== 503 && lastStatus !== 502 && lastStatus !== 504) break;
+    // A 429 can be model-specific. Briefly try the alternate model too, then use Workers AI.
+    if (![429, 502, 503, 504].includes(lastStatus)) break;
   }
 
   // Independent fallback: Cloudflare Workers AI, if the AI binding is configured.
@@ -513,17 +514,21 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
       ];
       const cfResult = await Promise.race([
         cloudflareAI.run("@cf/meta/llama-3.1-8b-instruct-fp8", { messages, max_tokens: 1024 }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("Workers AI fallback exceeded 5s")), 5000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Workers AI fallback exceeded 9s")), 9000))
       ]);
       const cfAnswer = String(cfResult?.response || cfResult?.choices?.[0]?.message?.content || "").trim();
       if (cfAnswer) {
         console.log("OMNIX used Cloudflare Workers AI fallback.");
         return { ok: true, answer: cfAnswer, model: "cloudflare:@cf/meta/llama-3.1-8b-instruct-fp8", fallback: true, fallbackReason: lastError, upstreamStatus: lastStatus };
       }
-      console.error("Cloudflare Workers AI returned no text:", JSON.stringify(cfResult).slice(0, 500));
+      fallbackError = "Workers AI returned no text: " + JSON.stringify(cfResult).slice(0, 500);
+      console.error(fallbackError);
     } catch (error) {
-      console.error("Cloudflare Workers AI fallback failed:", String(error?.message || error).slice(0, 500));
+      fallbackError = String(error?.message || error).slice(0, 700);
+      console.error("Cloudflare Workers AI fallback failed:", fallbackError);
     }
+  } else {
+    fallbackError = "Workers AI binding is unavailable.";
   }
 
   let message;
@@ -539,7 +544,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI) {
     message = "Google's AI request failed (HTTP " + lastStatus + "). Check Worker logs for details.";
   }
 
-  return { ok: false, status: 502, message, upstreamStatus: lastStatus, upstreamMessage: lastError, model: lastModel };
+  return { ok: false, status: 502, message, upstreamStatus: lastStatus, upstreamMessage: lastError, fallbackError, model: lastModel };
 }
 
 export default {
@@ -698,7 +703,14 @@ export default {
           error: result.message,
           model: result.model || MODEL,
           upstreamStatus: result.upstreamStatus,
-          diagnostic: result.upstreamMessage
+          diagnostic: result.upstreamMessage,
+          fallbackDiagnostic: result.fallbackError || "",
+          sources: search.sources,
+          searchProvider: search.provider,
+          searchLatencyMs: search.elapsedMs || 0,
+          webSearchUsed: search.ok,
+          webSearchUnavailable: shouldSearchWeb(message) && !search.ok,
+          latencyMs: Date.now() - requestStartedAt
         }, result.status);
       }
 
