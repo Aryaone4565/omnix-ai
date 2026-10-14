@@ -36,11 +36,36 @@ textarea { flex: 1; min-width: 0; resize: none; height: 45px; max-height: 120px;
 .memory-tools button { background:#151821; color:#c4b5fd; border:1px solid #343846; padding:7px 10px; border-radius:9px; font-size:12px; cursor:pointer; }
 .note { text-align: center; color: #71717a; font-size: 11px; margin-top: 10px; }
 button:active { transform: scale(.97); }
+.mode-switch { display:flex; gap:6px; padding:4px; border:1px solid #292d3a; border-radius:12px; background:#11141b; }
+.mode-btn { border:0; border-radius:9px; padding:9px 12px; color:#a1a1aa; background:transparent; cursor:pointer; font-size:13px; white-space:nowrap; }
+.mode-btn.active { color:#fff; background:#6d28d9; }
+#voicePanel { max-width:700px; margin:18px auto; padding:24px 18px; border:1px solid #343846; border-radius:20px; background:radial-gradient(circle at top,#20183d,#11141b 65%); text-align:center; }
+#voicePanel[hidden] { display:none !important; }
+.voice-orb { width:94px; height:94px; border-radius:50%; margin:4px auto 18px; background:radial-gradient(circle at 30% 25%,#67e8f9,#7c3aed 58%,#151821); box-shadow:0 0 35px #7c3aed55; }
+#voicePanel h2 { margin:8px 0; font-size:22px; }
+#voiceStatus { color:#c4b5fd; font-size:14px; line-height:1.6; margin:10px auto 18px; }
+.voice-actions { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+.voice-actions button { border:1px solid #51417a; border-radius:12px; padding:12px 18px; font:inherit; color:white; background:#6d28d9; cursor:pointer; }
+.voice-actions button.secondary { background:#181b24; border-color:#343846; }
+.voice-actions button:disabled { opacity:.55; cursor:wait; }
+.voice-note { color:#71717a; font-size:11px; line-height:1.5; max-width:480px; margin:16px auto 0; }
+@media (max-width:520px) {
+  header { flex-wrap:wrap; gap:10px; padding:12px; }
+  .logo { font-size:20px; }
+  .mode-switch { order:3; width:100%; justify-content:center; }
+  .mode-btn { flex:1; }
+  .status { margin-left:auto; }
+}
+
 </style>
 </head>
 <body>
 <header>
   <div class="logo">OMNIX</div>
+  <div class="mode-switch" role="group" aria-label="Chat mode">
+    <button type="button" id="textModeBtn" class="mode-btn active" aria-pressed="true">Text</button>
+    <button type="button" id="voiceModeBtn" class="mode-btn" aria-pressed="false">🎙 Live Voice</button>
+  </div>
   <div class="status" id="status">● CONNECTING TO AI</div>
 </header>
 <main id="chat">
@@ -55,11 +80,22 @@ button:active { transform: scale(.97); }
       <button onclick="suggest('Give me an interesting space fact')">🚀 Explore space</button>
     </div>
   </section>
+  <section id="voicePanel" hidden aria-live="polite">
+    <div class="voice-orb" aria-hidden="true"></div>
+    <h2>OMNIX Live Voice</h2>
+    <p class="subtitle">Talk naturally with OMNIX. Your saved memories and recent text-chat context are included.</p>
+    <div id="voiceStatus">Tap Start Voice and allow microphone access.</div>
+    <div class="voice-actions">
+      <button type="button" id="voiceConnectBtn">🎙 Start Voice</button>
+      <button type="button" id="voiceStopBtn" class="secondary" disabled>End session</button>
+    </div>
+    <p class="voice-note">Uses Google Gemini Live. Microphone audio is sent to Google for real-time responses. Voice sessions may be limited by model availability, quota, and session duration.</p>
+  </section>
   <div id="messages" aria-live="polite"></div>
 </main>
 <footer>
-  <div class="memory-tools"><button type="button" onclick="memoryAction('show')">🧠 My memories</button><button type="button" onclick="memoryAction('clear')">Forget memories</button></div>
-  <div class="composer">
+  <div class="memory-tools" id="memoryTools"><button type="button" onclick="memoryAction('show')">🧠 My memories</button><button type="button" onclick="memoryAction('clear')">Forget memories</button></div>
+  <div class="composer" id="composer">
     <textarea id="input" placeholder="Ask OMNIX anything..." rows="1" aria-label="Message"></textarea>
     <button id="send" aria-label="Send message">↑</button>
   </div>
@@ -83,6 +119,11 @@ function getUserId() {
   return id;
 }
 const userId = getUserId();
+window.OMNIX_API_URL = API_URL;
+window.omnixGetContext = () => ({ userId, recentMessages: conversation.slice(-8) });
+window.omnixAppendConversation = (role, content) => {
+  if (typeof content === "string" && content.trim()) conversation.push({ role, content: content.trim() });
+};
 
 function suggest(text) {
   input.value = text;
@@ -204,6 +245,230 @@ input.addEventListener("keydown", function(event) {
     submitMessage();
   }
 });
+</script>
+<script type="module">
+const textModeBtn = document.getElementById("textModeBtn");
+const voiceModeBtn = document.getElementById("voiceModeBtn");
+const voicePanel = document.getElementById("voicePanel");
+const voiceStatus = document.getElementById("voiceStatus");
+const voiceConnectBtn = document.getElementById("voiceConnectBtn");
+const voiceStopBtn = document.getElementById("voiceStopBtn");
+const composer = document.getElementById("composer");
+const memoryTools = document.getElementById("memoryTools");
+const statusLabel = document.getElementById("status");
+const messagesEl = document.getElementById("messages");
+let liveSession = null;
+let micStream = null;
+let audioContext = null;
+let micSource = null;
+let micProcessor = null;
+let silentGain = null;
+let nextPlaybackTime = 0;
+let inputTranscript = "";
+let outputTranscript = "";
+let stopping = false;
+
+function setMode(mode) {
+  const voice = mode === "voice";
+  textModeBtn.classList.toggle("active", !voice);
+  voiceModeBtn.classList.toggle("active", voice);
+  textModeBtn.setAttribute("aria-pressed", String(!voice));
+  voiceModeBtn.setAttribute("aria-pressed", String(voice));
+  voicePanel.hidden = !voice;
+  composer.hidden = voice;
+  memoryTools.hidden = voice;
+  if (voice) {
+    const welcome = document.getElementById("welcome");
+    if (welcome) welcome.style.display = "none";
+  } else if (!window.omnixGetContext().recentMessages.length) {
+    const welcome = document.getElementById("welcome");
+    if (welcome) welcome.style.display = "";
+  }
+}
+textModeBtn.addEventListener("click", () => {
+  if (liveSession || micStream) stopVoiceSession("Voice session ended.");
+  setMode("text");
+});
+voiceModeBtn.addEventListener("click", () => setMode("voice"));
+
+function addTranscriptMessage(text, role) {
+  if (!text || !text.trim()) return;
+  const node = document.createElement("div");
+  node.className = "message " + (role === "user" ? "user" : "assistant");
+  node.textContent = text.trim();
+  messagesEl.appendChild(node);
+  document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
+  window.omnixAppendConversation(role, text.trim());
+}
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function floatToPcm16Base64(input, sampleRate) {
+  let samples = input;
+  if (sampleRate !== 16000) {
+    const ratio = sampleRate / 16000;
+    const outLength = Math.max(1, Math.floor(input.length / ratio));
+    samples = new Float32Array(outLength);
+    for (let i = 0; i < outLength; i++) {
+      const pos = i * ratio;
+      const left = Math.floor(pos);
+      const right = Math.min(left + 1, input.length - 1);
+      const fraction = pos - left;
+      samples[i] = input[left] * (1 - fraction) + input[right] * fraction;
+    }
+  }
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    pcm[i] = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
+  }
+  return bytesToBase64(new Uint8Array(pcm.buffer));
+}
+function playAudioChunk(base64) {
+  if (!audioContext) return;
+  try {
+    const binary = atob(base64);
+    const count = Math.floor(binary.length / 2);
+    const buffer = audioContext.createBuffer(1, count, 24000);
+    const channel = buffer.getChannelData(0);
+    for (let i = 0; i < count; i++) {
+      const value = (binary.charCodeAt(i * 2) & 255) | ((binary.charCodeAt(i * 2 + 1) & 255) << 8);
+      channel[i] = (value & 0x8000) ? (value - 0x10000) / 32768 : value / 32767;
+    }
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    const startAt = Math.max(audioContext.currentTime + 0.02, nextPlaybackTime);
+    source.start(startAt);
+    nextPlaybackTime = startAt + buffer.duration;
+  } catch (error) {
+    console.warn("OMNIX audio playback chunk failed:", error);
+  }
+}
+async function startMicrophone() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) throw new Error("This browser does not support live audio.");
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+  });
+  audioContext = new AudioCtx();
+  await audioContext.resume();
+  nextPlaybackTime = audioContext.currentTime;
+  micSource = audioContext.createMediaStreamSource(micStream);
+  micProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+  silentGain = audioContext.createGain();
+  silentGain.gain.value = 0;
+  micProcessor.onaudioprocess = event => {
+    if (!liveSession) return;
+    try {
+      const audioBase64 = floatToPcm16Base64(event.inputBuffer.getChannelData(0), audioContext.sampleRate);
+      liveSession.sendRealtimeInput({ audio: { data: audioBase64, mimeType: "audio/pcm;rate=16000" } });
+    } catch (error) {
+      console.warn("OMNIX microphone chunk failed:", error);
+    }
+  };
+  micSource.connect(micProcessor);
+  micProcessor.connect(silentGain);
+  silentGain.connect(audioContext.destination);
+}
+async function startVoiceSession() {
+  if (liveSession || voiceConnectBtn.disabled) return;
+  voiceConnectBtn.disabled = true;
+  voiceStatus.textContent = "Connecting securely to Gemini Live…";
+  statusLabel.textContent = "● STARTING LIVE VOICE";
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access requires a secure HTTPS page and a supported browser.");
+    const context = window.omnixGetContext();
+    const response = await fetch(window.OMNIX_API_URL + "/live-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(context),
+      signal: AbortSignal.timeout(20000)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.token) throw new Error(data.error || "Live Voice setup failed (" + response.status + ").");
+    const { GoogleGenAI, Modality } = await import("https://esm.sh/@google/genai");
+    const ai = new GoogleGenAI({ apiKey: data.token });
+    liveSession = await ai.live.connect({
+      model: "gemini-3.8-live",
+      config: {
+        responseModalities: [Modality.AUDIO],
+        sessionResumption: {},
+        inputAudioTranscription: {},
+        outputAudioTranscription: {}
+      },
+      callbacks: {
+        onopen: () => {
+          voiceStatus.textContent = "Connected. Speak naturally — OMNIX is listening.";
+          statusLabel.textContent = "● LIVE VOICE CONNECTED";
+          voiceStopBtn.disabled = false;
+        },
+        onmessage: message => {
+          const server = message?.serverContent || {};
+          const inputText = server.inputTranscription?.text || server.inputAudioTranscription?.text || "";
+          const outputText = server.outputTranscription?.text || server.outputAudioTranscription?.text || "";
+          if (inputText) inputTranscript += inputText;
+          if (outputText) outputTranscript += outputText;
+          for (const part of (server.modelTurn?.parts || [])) {
+            if (part.inlineData?.data && String(part.inlineData.mimeType || "").startsWith("audio/pcm")) {
+              playAudioChunk(part.inlineData.data);
+            }
+          }
+          if (server.interrupted) nextPlaybackTime = audioContext?.currentTime || 0;
+          if (server.turnComplete) {
+            if (inputTranscript.trim()) addTranscriptMessage(inputTranscript, "user");
+            if (outputTranscript.trim()) addTranscriptMessage(outputTranscript, "assistant");
+            inputTranscript = "";
+            outputTranscript = "";
+            voiceStatus.textContent = "Connected. Keep talking whenever you're ready.";
+          }
+        },
+        onerror: event => {
+          voiceStatus.textContent = "Voice connection error: " + (event?.message || "Please try again.");
+          statusLabel.textContent = "● LIVE VOICE ISSUE";
+        },
+        onclose: event => {
+          if (!stopping) stopVoiceSession("Voice connection closed" + (event?.reason ? ": " + event.reason : "."));
+        }
+      }
+    });
+    await startMicrophone();
+    voiceStopBtn.disabled = false;
+    voiceStatus.textContent = "Connected. Speak naturally — OMNIX is listening.";
+    statusLabel.textContent = "● LIVE VOICE CONNECTED";
+  } catch (error) {
+    stopVoiceSession("Could not start Live Voice: " + (error?.message || "Unknown error"));
+  } finally {
+    voiceConnectBtn.disabled = false;
+  }
+}
+function stopVoiceSession(message = "Voice session ended.") {
+  stopping = true;
+  const session = liveSession;
+  liveSession = null;
+  try { session?.close(); } catch {}
+  try { micProcessor?.disconnect(); } catch {}
+  try { micSource?.disconnect(); } catch {}
+  try { silentGain?.disconnect(); } catch {}
+  micProcessor = null;
+  micSource = null;
+  silentGain = null;
+  if (micStream) micStream.getTracks().forEach(track => track.stop());
+  micStream = null;
+  if (audioContext) audioContext.close().catch(() => {});
+  audioContext = null;
+  nextPlaybackTime = 0;
+  inputTranscript = "";
+  outputTranscript = "";
+  voiceStopBtn.disabled = true;
+  voiceStatus.textContent = message;
+  statusLabel.textContent = "● LIVE VOICE OFFLINE";
+  stopping = false;
+}
+voiceConnectBtn.addEventListener("click", startVoiceSession);
+voiceStopBtn.addEventListener("click", () => stopVoiceSession("Voice session ended. Tap Start Voice to reconnect."));
 </script>
 </body>
 </html>
