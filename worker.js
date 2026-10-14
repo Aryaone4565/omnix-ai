@@ -567,7 +567,7 @@ export default {
         model: MODEL,
         creator: "Arya Gupta",
         createdYear: 2026,
-        version: "2026-10-14-fast-official-search",
+        version: "2026-10-14-quota-aware-fallback",
         currentDate: new Date().toISOString().slice(0, 10),
         memoryEnabled: Boolean(env.OMNIX_DB)
       });
