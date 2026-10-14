@@ -74,7 +74,7 @@ jobs:
           import json, re, urllib.parse
           data = json.load(open("/tmp/search-response.json"))
           if "error" in data:
-            raise SystemExit(json.dumps({k: data.get(k) for k in ("error", "model", "upstreamStatus", "diagnostic", "webSearchUnavailable", "searchLatencyMs", "latencyMs")}, indent=2))
+            raise SystemExit(json.dumps({k: data.get(k) for k in ("error", "model", "upstreamStatus", "diagnostic", "fallbackDiagnostic", "webSearchUsed", "webSearchUnavailable", "searchProvider", "searchLatencyMs", "sources", "latencyMs")}, indent=2))
           assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
           assert data.get("webSearchUsed") is True, {
             "webSearchUsed": data.get("webSearchUsed"),
