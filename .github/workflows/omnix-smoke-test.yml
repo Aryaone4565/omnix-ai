@@ -30,7 +30,7 @@ jobs:
           assert data.get("status") == "OMNIX brain is online", data
           assert data.get("creator") == "Arya Gupta", data
           assert data.get("memoryEnabled") is True, data
-          assert data.get("version") == "2026-10-14-bounded-search-fast-model", data
+          assert data.get("version") == "2026-10-14-fast-official-search", data
           print("Health check passed:", {k: data.get(k) for k in ("status", "model", "creator", "version", "currentDate", "memoryEnabled")})
           PY
 
@@ -53,7 +53,7 @@ jobs:
           data = json.load(open("/tmp/chat-response.json"))
           assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
           assert isinstance(data.get("latencyMs"), (int, float)) and data["latencyMs"] > 0, data
-          print("Chat check passed:", {"model": data.get("model"), "latencyMs": data.get("latencyMs"), "replyChars": len(data["reply"])})
+          print("Chat check passed:", {"model": data.get("model"), "latencyMs": data.get("latencyMs"), "fallbackUsed": data.get("fallbackUsed"), "upstreamStatus": data.get("upstreamStatus"), "fallbackReason": data.get("fallbackReason"), "replyChars": len(data["reply"])})
           PY
 
       - name: Check fresh and relevant ISRO web search
