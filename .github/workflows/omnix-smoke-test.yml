@@ -30,7 +30,7 @@ jobs:
           assert data.get("status") == "OMNIX brain is online", data
           assert data.get("creator") == "Arya Gupta", data
           assert data.get("memoryEnabled") is True, data
-          assert data.get("version") == "2026-10-14-fast-official-search", data
+          assert data.get("version") == "2026-10-14-quota-aware-fallback", data
           print("Health check passed:", {k: data.get(k) for k in ("status", "model", "creator", "version", "currentDate", "memoryEnabled")})
           PY
 
@@ -54,6 +54,42 @@ jobs:
           assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
           assert isinstance(data.get("latencyMs"), (int, float)) and data["latencyMs"] > 0, data
           print("Chat check passed:", {"model": data.get("model"), "latencyMs": data.get("latencyMs"), "fallbackUsed": data.get("fallbackUsed"), "upstreamStatus": data.get("upstreamStatus"), "fallbackReason": data.get("fallbackReason"), "replyChars": len(data["reply"])})
+          PY
+
+      - name: Check persistent memory save, read, and cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, uuid
+          from urllib.request import Request, urlopen
+
+          endpoint = "https://omnix-brain.aryaone4565.workers.dev/"
+          origin = "https://aryaone4565.github.io"
+          user_id = str(uuid.uuid4())
+
+          def send(message):
+              payload = json.dumps({"userId": user_id, "message": message}).encode()
+              request = Request(endpoint, data=payload, headers={
+                  "Origin": origin,
+                  "Content-Type": "application/json"
+              }, method="POST")
+              with urlopen(request, timeout=12) as response:
+                  return json.loads(response.read().decode())
+
+          try:
+              send("Forget all saved memories.")
+              saved = send("Remember that OMNIX persistent-memory smoke test passed.")
+              assert "saved" in saved.get("reply", "").lower(), saved
+              listed = send("What are my saved memories?")
+              assert "OMNIX persistent-memory smoke test passed" in listed.get("reply", ""), listed
+              assert len(listed.get("memories", [])) >= 1, listed
+              print("Persistent-memory save/read check passed.")
+          finally:
+              try:
+                  send("Forget all saved memories.")
+              except Exception as exc:
+                  print("Warning: automatic test-memory cleanup failed:", type(exc).__name__)
           PY
 
       - name: Check fresh and relevant ISRO web search
