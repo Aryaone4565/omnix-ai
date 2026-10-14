@@ -61,21 +61,33 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, uuid
-          from urllib.request import Request, urlopen
+          import json, subprocess, uuid
 
           endpoint = "https://omnix-brain.aryaone4565.workers.dev/"
           origin = "https://aryaone4565.github.io"
           user_id = str(uuid.uuid4())
 
           def send(message):
-              payload = json.dumps({"userId": user_id, "message": message}).encode()
-              request = Request(endpoint, data=payload, headers={
-                  "Origin": origin,
-                  "Content-Type": "application/json"
-              }, method="POST")
-              with urlopen(request, timeout=12) as response:
-                  return json.loads(response.read().decode())
+              payload = json.dumps({
+                  "userId": user_id,
+                  "messages": [{"role": "user", "content": message}]
+              })
+              result = subprocess.run([
+                  "curl", "--silent", "--show-error", "--max-time", "15",
+                  "-w", "\\nHTTP_STATUS:%{http_code}",
+                  "-H", "Origin: " + origin,
+                  "-H", "Content-Type: application/json",
+                  "--data-binary", payload,
+                  endpoint
+              ], capture_output=True, text=True, check=False)
+              combined = result.stdout
+              if "HTTP_STATUS:" not in combined:
+                  raise RuntimeError("curl failed: " + (result.stderr or combined)[:600])
+              body, status_text = combined.rsplit("\\nHTTP_STATUS:", 1)
+              status = int(status_text.strip() or 0)
+              if status != 200:
+                  raise RuntimeError("OMNIX returned HTTP " + str(status) + ": " + body[:1000])
+              return json.loads(body)
 
           try:
               send("Forget all saved memories.")
@@ -89,7 +101,7 @@ jobs:
               try:
                   send("Forget all saved memories.")
               except Exception as exc:
-                  print("Warning: automatic test-memory cleanup failed:", type(exc).__name__)
+                  print("Warning: automatic test-memory cleanup failed:", str(exc)[:700])
           PY
 
       - name: Check fresh and relevant ISRO web search
