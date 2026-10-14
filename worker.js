@@ -1,6 +1,6 @@
 const ALLOWED_ORIGIN = "https://aryaone4565.github.io";
-const MODEL = "gemini-3.8-flash";
-const FALLBACK_MODEL = "gemini-3.5-flash-lite";
+const MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_MODEL = "gemini-3.8-flash";
 const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. You normally use Google Gemini, and Cloudflare Workers AI may answer when Gemini is unavailable. Do not misrepresent which provider answered. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
@@ -187,6 +187,18 @@ function searchRelevance(item, query, newsRequest, isroRequest) {
   if (isroRequest && !officialIsro && !(/\bisro\b|indian space research organisation/i.test(text))) return -100;
 
   const terms = searchTerms(query);
+  const normalizedQuery = cleanSearchQuery(query).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  // For a one-word search, avoid unrelated titles that merely mention the word
+  // (for example, "Instagram egg" or unrelated songs). Keep exact-title results
+  // and official-looking domains whose hostname contains the searched brand.
+  if (terms.length === 1) {
+    const exactTitle = normalizedTitle === normalizedQuery;
+    const matchingDomain = host.split(".").includes(terms[0]);
+    if (!exactTitle && !matchingDomain) return -100;
+  }
+
   const matched = terms.filter(term => {
     if (term === "isro") return /\bisro\b|indian space research organisation/i.test(text);
     return new RegExp("\\b" + term + "\\b", "i").test(text);
@@ -198,6 +210,7 @@ function searchRelevance(item, query, newsRequest, isroRequest) {
 
   let score = officialIsro ? 9 : 0;
   score += terms.length ? (matched.length / terms.length) * 8 : 1;
+  if (terms.length === 1 && normalizedTitle === normalizedQuery) score += 8;
   score += terms.filter(term => {
     if (term === "isro") return /\bisro\b|indian space research organisation/i.test(title);
     return new RegExp("\\b" + term + "\\b", "i").test(title);
