@@ -1,0 +1,95 @@
+name: OMNIX live smoke test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/omnix-smoke-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Health, chat, and current-news checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      OMNIX_URL: https://omnix-brain.aryaone4565.workers.dev/
+      OMNIX_ORIGIN: https://aryaone4565.github.io
+      TEST_USER_ID: 8f147bb8-e4e2-49ec-9990-f70b9f4c3af1
+    steps:
+      - name: Check Worker health and required configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 12 "$OMNIX_URL" -o /tmp/health.json
+          python3 - <<'PY'
+          import json, os
+          data = json.load(open("/tmp/health.json"))
+          assert data.get("status") == "OMNIX brain is online", data
+          assert data.get("creator") == "Arya Gupta", data
+          assert data.get("memoryEnabled") is True, data
+          assert data.get("version") == "2026-10-14-search-relevance-and-speed", data
+          print("Health check passed:", {k: data.get(k) for k in ("status", "model", "creator", "version", "currentDate", "memoryEnabled")})
+          PY
+
+      - name: Check normal chat and latency reporting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/chat.json
+          import json, os
+          print(json.dumps({
+            "userId": os.environ["TEST_USER_ID"],
+            "messages": [{"role": "user", "content": "Reply with a short greeting and say you are online."}]
+          }))
+          PY
+          curl --silent --show-error --fail --max-time 32 \
+            -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" \
+            --data-binary @/tmp/chat.json "$OMNIX_URL" -o /tmp/chat-response.json
+          python3 - <<'PY'
+          import json
+          data = json.load(open("/tmp/chat-response.json"))
+          assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
+          assert isinstance(data.get("latencyMs"), (int, float)) and data["latencyMs"] > 0, data
+          print("Chat check passed:", {"model": data.get("model"), "latencyMs": data.get("latencyMs"), "replyChars": len(data["reply"])})
+          PY
+
+      - name: Check fresh and relevant ISRO web search
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/search.json
+          import json, os
+          print(json.dumps({
+            "userId": os.environ["TEST_USER_ID"],
+            "messages": [{"role": "user", "content": "Search the web for the latest ISRO news. Summarize only verified updates and mention dates."}]
+          }))
+          PY
+          curl --silent --show-error --fail --max-time 42 \
+            -H "Origin: $OMNIX_ORIGIN" -H "Content-Type: application/json" \
+            --data-binary @/tmp/search.json "$OMNIX_URL" -o /tmp/search-response.json
+          python3 - <<'PY'
+          import json, re, urllib.parse
+          data = json.load(open("/tmp/search-response.json"))
+          assert isinstance(data.get("reply"), str) and data["reply"].strip(), data
+          assert data.get("webSearchUsed") is True, {
+            "webSearchUsed": data.get("webSearchUsed"),
+            "unavailable": data.get("webSearchUnavailable"),
+            "reply": data.get("reply"),
+          }
+          sources = data.get("sources") or []
+          assert sources, data
+          bad = re.compile(r"ISO New England|ISNA News|iSONEWS", re.I)
+          for source in sources:
+            combined = " ".join(str(source.get(k, "")) for k in ("title", "description", "url"))
+            assert not bad.search(combined), source
+            host = urllib.parse.urlparse(source.get("url", "")).hostname or ""
+            assert host.endswith("isro.gov.in") or re.search(r"\bISRO\b|Indian Space Research Organisation", combined, re.I), source
+          print("ISRO search passed:", {
+            "latencyMs": data.get("latencyMs"),
+            "providers": data.get("searchProvider"),
+            "sources": [{"title": s.get("title"), "publishedAt": s.get("publishedAt"), "url": s.get("url")} for s in sources],
+          })
+          PY
