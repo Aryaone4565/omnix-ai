@@ -266,6 +266,7 @@ let silentGain = null;
 let nextPlaybackTime = 0;
 let inputTranscript = "";
 let outputTranscript = "";
+let lastVoiceError = "";
 let stopping = false;
 
 function setMode(mode) {
@@ -375,6 +376,7 @@ async function startMicrophone() {
 }
 async function startVoiceSession() {
   if (liveSession || voiceConnectBtn.disabled) return;
+  lastVoiceError = "";
   voiceConnectBtn.disabled = true;
   voiceStatus.textContent = "Connecting securely to Gemini Live…";
   statusLabel.textContent = "● STARTING LIVE VOICE";
@@ -426,11 +428,19 @@ async function startVoiceSession() {
           }
         },
         onerror: event => {
-          voiceStatus.textContent = "Voice connection error: " + (event?.message || "Please try again.");
+          const detail = String(event?.message || event?.error?.message || event?.reason || "").trim();
+          lastVoiceError = (detail || "Gemini Live reported a connection error.").slice(0, 500);
+          voiceStatus.textContent = "Live Voice error: " + lastVoiceError;
           statusLabel.textContent = "● LIVE VOICE ISSUE";
+          console.warn("OMNIX Gemini Live error:", event);
         },
         onclose: event => {
-          if (!stopping) stopVoiceSession("Voice connection closed" + (event?.reason ? ": " + event.reason : "."));
+          if (!stopping) {
+            const detail = lastVoiceError
+              ? "Live Voice error: " + lastVoiceError
+              : "Voice connection closed" + (event?.reason ? ": " + event.reason : ".");
+            stopVoiceSession(detail);
+          }
         }
       }
     });
