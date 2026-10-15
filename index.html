@@ -408,7 +408,19 @@ async function startVoiceSession() {
           voiceStopBtn.disabled = false;
         },
         onmessage: message => {
+          // Keep a readable server error when Gemini closes a session after setup.
+          if (message?.error) {
+            const e = message.error;
+            lastVoiceError = String(e.message || e.status || JSON.stringify(e)).slice(0, 500);
+            voiceStatus.textContent = "Gemini Live error: " + lastVoiceError;
+            console.warn("OMNIX Gemini Live server error:", message);
+            return;
+          }
           const server = message?.serverContent || {};
+          if (message?.goAway) {
+            const timeLeft = message.goAway.timeLeft || "soon";
+            voiceStatus.textContent = "Gemini is closing this voice connection (" + timeLeft + "). Reconnecting may be needed.";
+          }
           const inputText = server.inputTranscription?.text || server.inputAudioTranscription?.text || "";
           const outputText = server.outputTranscription?.text || server.outputAudioTranscription?.text || "";
           if (inputText) inputTranscript += inputText;
@@ -429,16 +441,21 @@ async function startVoiceSession() {
         },
         onerror: event => {
           const detail = String(event?.message || event?.error?.message || event?.reason || "").trim();
-          lastVoiceError = (detail || "Gemini Live reported a connection error.").slice(0, 500);
+          lastVoiceError = (detail || JSON.stringify(event) || "Gemini Live reported a connection error.").slice(0, 500);
           voiceStatus.textContent = "Live Voice error: " + lastVoiceError;
           statusLabel.textContent = "● LIVE VOICE ISSUE";
           console.warn("OMNIX Gemini Live error:", event);
         },
         onclose: event => {
           if (!stopping) {
+            const closeInfo = [
+              event?.code != null ? "code " + event.code : "",
+              event?.reason ? "reason: " + event.reason : ""
+            ].filter(Boolean).join(", ");
             const detail = lastVoiceError
               ? "Live Voice error: " + lastVoiceError
-              : "Voice connection closed" + (event?.reason ? ": " + event.reason : ".");
+              : "Voice connection closed" + (closeInfo ? " (" + closeInfo + ")" : ".") +
+                " If it closes again, send this exact message to Arya.";
             stopVoiceSession(detail);
           }
         }
