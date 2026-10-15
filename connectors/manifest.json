@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "product": "OMNIX Connect",
+  "purpose": "Discovery metadata for planned built-in, official remote, and custom MCP connectors.",
+  "connectors": [
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "list_conversations",
+        "read_message",
+        "draft_reply",
+        "send_email"
+      ],
+      "auth": "oauth",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "whatsapp-business",
+      "name": "WhatsApp Business Platform",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "send_message",
+        "reply_to_message"
+      ],
+      "auth": "provider-approved-auth",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "instagram-messaging",
+      "name": "Instagram Messaging",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "list_conversations",
+        "reply_to_message"
+      ],
+      "auth": "meta-oauth",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "discord",
+      "name": "Discord",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "send_message",
+        "reply_to_message"
+      ],
+      "auth": "oauth-or-bot-token",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "telegram",
+      "name": "Telegram",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "send_message",
+        "reply_to_message"
+      ],
+      "auth": "bot-token",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "messenger",
+      "name": "Messenger",
+      "type": "remote",
+      "status": "planned",
+      "capabilities": [
+        "list_conversations",
+        "reply_to_message"
+      ],
+      "auth": "meta-oauth",
+      "sideEffectsRequireApproval": true
+    },
+    {
+      "id": "custom-mcp-template",
+      "name": "Custom MCP Server",
+      "type": "mcp-custom",
+      "status": "template",
+      "capabilities": [],
+      "auth": "per-server",
+      "sideEffectsRequireApproval": true
+    }
+  ]
+}
