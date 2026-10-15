@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090b10">
+<title>OMNIX Connect</title>
+<style>
+:root{color-scheme:dark;--bg:#090b10;--panel:#141720;--line:#2a2e3b;--muted:#a1a1aa;--purple:#8b5cf6;--cyan:#38bdf8;--green:#34d399}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#17152b 0,var(--bg) 50%);color:#f4f4f5;font:15px/1.5 Arial,sans-serif;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px max(16px,calc((100vw - 1000px)/2));border-bottom:1px solid var(--line);background:#090b10d9;position:sticky;top:0;backdrop-filter:blur(12px);z-index:2}
+.logo{font-weight:800;letter-spacing:4px;font-size:22px;background:linear-gradient(90deg,#a78bfa,#38bdf8);color:transparent;background-clip:text}
+a{color:#7dd3fc;text-decoration:none}a:hover{text-decoration:underline}.back{border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:#ddd;background:#151821}
+main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18px}.eyebrow{color:#c4b5fd;text-transform:uppercase;letter-spacing:2px;font-size:11px;font-weight:bold}.hero h1{font-size:clamp(30px,5vw,46px);line-height:1.1;margin:10px 0}.hero p{color:var(--muted);max-width:650px}.notice{border:1px solid #66502b;background:#241d10;color:#fcd99b;border-radius:13px;padding:13px 15px;font-size:13px;margin:18px 0 25px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.tab{border:1px solid var(--line);background:#11141b;color:#c4c4cc;border-radius:11px;padding:10px 14px;cursor:pointer}.tab.active{background:#302153;border-color:#7551bd;color:#fff}
+.section-title{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:20px 0 12px}.section-title h2{margin:0;font-size:20px}.count{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}.card{border:1px solid var(--line);background:linear-gradient(145deg,#171a24,#101219);border-radius:16px;padding:16px;min-width:0}.card-top{display:flex;gap:12px;align-items:center}.icon{width:43px;height:43px;display:grid;place-items:center;border:1px solid #383248;background:#201b31;border-radius:12px;font-size:22px;flex:none}.card h3{margin:0 0 3px;font-size:16px}.badge{font-size:10px;letter-spacing:.5px;border:1px solid #51417a;color:#c4b5fd;padding:3px 7px;border-radius:20px;display:inline-block}.card p{color:var(--muted);font-size:13px;min-height:39px}.caps{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.cap{font-size:11px;color:#d4d4d8;background:#222530;border-radius:6px;padding:4px 7px}.card button,.primary,.danger{cursor:pointer;border:1px solid #51417a;background:#29203f;color:#eee;border-radius:10px;padding:9px 12px;font:inherit;font-size:13px}.card button:disabled{opacity:.6;cursor:default}.empty{border:1px dashed #393d4a;color:var(--muted);border-radius:14px;padding:22px;text-align:center}
+.panel{border:1px solid var(--line);background:#12151d;border-radius:16px;padding:18px;margin-top:12px}.panel h3{margin:0 0 6px}.field{display:grid;gap:6px;margin:13px 0}.field label{font-size:13px;color:#d4d4d8}.field input,.field select,.field textarea{width:100%;border:1px solid #363a48;background:#0b0d13;color:#f4f4f5;border-radius:10px;padding:11px;font:inherit}.field small{color:var(--muted);font-size:11px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.primary{background:var(--purple);border-color:var(--purple);font-weight:bold}.danger{background:#30191f;border-color:#71313b}.custom-item{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.custom-item p{min-height:0;margin:4px 0}.hidden{display:none!important}.foot{color:#71717a;font-size:11px;text-align:center;margin-top:30px}
+@media(max-width:520px){header{padding:12px 14px}.logo{font-size:19px}main{padding:18px 13px 45px}.hero{padding-top:12px}}
+</style>
+</head>
+<body>
+<header><div class="logo">OMNIX <span style="color:#a1a1aa;font-size:11px;letter-spacing:1px">CONNECT</span></div><a class="back" href="https://arya4565.github.io/omnix-ai/">← Back to OMNIX</a></header>
+<main>
+<section class="hero"><div class="eyebrow">Extensible integration hub</div><h1>Your AI. Your tools.<br>One connector system.</h1><p>Explore planned integrations and keep a local list of remote MCP server configurations. The design is built to grow beyond today's apps.</p></section>
+<div class="notice"><strong>Preview status:</strong> This is the first Connect interface, not a live connector runtime. App connections, OAuth, MCP tool execution, and message sending are not enabled yet. Custom server entries are saved only in this browser; no credentials are requested or stored here.</div>
+<div class="tabs" role="tablist"><button class="tab active" data-tab="discover">Discover</button><button class="tab" data-tab="connected">Connected</button><button class="tab" data-tab="custom">Custom connectors</button></div>
+<section id="discover">
+<div class="section-title"><h2>Popular integrations</h2><span class="count">6 planned connectors</span></div>
+<div class="grid" id="catalog"></div>
+</section>
+<section id="connected" class="hidden"><div class="section-title"><h2>Connected apps</h2></div><div class="empty" id="connectedEmpty">No live app connections yet. A connector appears here only after secure authentication is implemented and completed.</div><div class="grid hidden" id="connectedGrid"></div></section>
+<section id="custom" class="hidden">
+<div class="section-title"><h2>Custom MCP servers</h2><span class="count">Configuration list only</span></div>
+<div class="panel"><h3>Add a remote MCP server</h3><p style="color:var(--muted);font-size:13px;margin-top:4px">Save the server's display name and HTTPS endpoint for later setup. This page will not contact the endpoint or execute its tools.</p>
+<form id="customForm">
+<div class="field"><label for="serverName">Connector name</label><input id="serverName" maxlength="60" required placeholder="e.g. My project tools"></div>
+<div class="field"><label for="serverUrl">Remote MCP endpoint (HTTPS)</label><input id="serverUrl" type="url" required maxlength="500" placeholder="https://mcp.example.com/mcp"><small>Use a server you trust. Do not include API keys, passwords, or tokens in the URL.</small></div>
+<div class="field"><label for="serverNotes">Notes (optional)</label><textarea id="serverNotes" rows="2" maxlength="300" placeholder="What should this connector do?"></textarea></div>
+<div class="actions"><button class="primary" type="submit">＋ Save configuration</button><button class="tab" type="reset">Clear</button></div>
+</form></div>
+<div class="grid" id="customList" style="margin-top:12px"></div>
+</section>
+<p class="foot">OMNIX Connect · Connector configs are stored in this browser only · Never enter secrets into this preview.</p>
+</main>
+<script>
+const catalog=[
+{id:"gmail",name:"Gmail",icon:"📧",status:"PLANNED",description:"Compose emails and prepare replies using supported Gmail API permissions.",caps:["Search email","Draft reply","Send email"]},
+{id:"whatsapp-business",name:"WhatsApp Business",icon:"💚",status:"PLANNED",description:"Messaging through eligible WhatsApp Business Platform integrations.",caps:["Send message","Reply"]},
+{id:"instagram-messaging",name:"Instagram",icon:"📸",status:"PLANNED",description:"Messaging actions available to eligible professional accounts and approved apps.",caps:["Conversations","Reply"]},
+{id:"discord",name:"Discord",icon:"🎮",status:"PLANNED",description:"Use an authorized bot or supported OAuth integration to message where permitted.",caps:["Send message","Reply"]},
+{id:"telegram",name:"Telegram",icon:"✈️",status:"PLANNED",description:"Add Telegram bot messaging with explicitly configured permissions.",caps:["Send message","Reply"]},
+{id:"messenger",name:"Messenger",icon:"💬",status:"PLANNED",description:"Messaging features subject to Meta API eligibility and permissions.",caps:["Conversations","Reply"]}
+];
+const $=id=>document.getElementById(id);
+function getCustom(){try{const v=JSON.parse(localStorage.getItem("omnix_connect_custom_configs_v1")||"[]");return Array.isArray(v)?v:[]}catch{return []}}
+function saveCustom(v){localStorage.setItem("omnix_connect_custom_configs_v1",JSON.stringify(v))}
+function safeUrl(raw){try{const u=new URL(raw);return u.protocol==="https:"&&!u.username&&!u.password&&!u.hash&&u.hostname.includes(".")?u:null}catch{return null}}
+function renderCatalog(){$("catalog").replaceChildren();catalog.forEach(c=>{const card=document.createElement("article");card.className="card";const top=document.createElement("div");top.className="card-top";const icon=document.createElement("div");icon.className="icon";icon.textContent=c.icon;const title=document.createElement("div");const h=document.createElement("h3");h.textContent=c.name;const badge=document.createElement("span");badge.className="badge";badge.textContent=c.status;title.append(h,badge);top.append(icon,title);const p=document.createElement("p");p.textContent=c.description;const caps=document.createElement("div");caps.className="caps";c.caps.forEach(x=>{const s=document.createElement("span");s.className="cap";s.textContent=x;caps.append(s)});const b=document.createElement("button");b.type="button";b.textContent="Not connected yet";b.disabled=true;card.append(top,p,caps,b);$("catalog").append(card)})}
+function renderCustom(){const root=$("customList");root.replaceChildren();const items=getCustom();if(!items.length){const e=document.createElement("div");e.className="empty";e.textContent="No custom connector configurations saved in this browser.";root.append(e);return}items.forEach(item=>{const card=document.createElement("article");card.className="card custom-item";const info=document.createElement("div");const h=document.createElement("h3");h.textContent=item.name;const p=document.createElement("p");p.textContent=item.url;const note=document.createElement("p");note.textContent=item.notes||"No notes";const badge=document.createElement("span");badge.className="badge";badge.textContent="SAVED LOCALLY · NOT CONNECTED";info.append(h,badge,p,note);const remove=document.createElement("button");remove.className="danger";remove.textContent="Remove";remove.addEventListener("click",()=>{if(confirm("Remove this saved configuration from this browser?")){saveCustom(getCustom().filter(x=>x.id!==item.id));renderCustom()}});card.append(info,remove);root.append(card)})}
+document.querySelectorAll("[data-tab]").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b===btn));["discover","connected","custom"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab));if(btn.dataset.tab==="custom")renderCustom()}));
+$("customForm").addEventListener("submit",e=>{e.preventDefault();const name=$("serverName").value.trim(),raw=$("serverUrl").value.trim(),notes=$("serverNotes").value.trim(),url=safeUrl(raw);if(!url){alert("Enter a valid HTTPS hostname without embedded credentials or a URL fragment.");return}if(/localhost|127\.|\.local$|\.internal$|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./i.test(url.hostname)){alert("Local and private-network endpoints are not accepted in this preview.");return}const items=getCustom();if(items.some(x=>x.url===url.href)){alert("That endpoint is already saved.");return}items.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name,url:url.href,notes,createdAt:new Date().toISOString()});saveCustom(items);$("customForm").reset();renderCustom();alert("Configuration saved in this browser only. The server has not been contacted.")});
+renderCatalog();renderCustom();
+</script>
+</body>
+</html>
