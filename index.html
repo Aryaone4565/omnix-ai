@@ -173,6 +173,85 @@ function renderSources(messageElement, sources, searchUnavailable) {
   }
 }
 
+const GMAIL_CONNECT_API = "https://omnix-connect.aryaone4565.workers.dev";
+function getGmailOwnerToken() {
+  let token = localStorage.getItem("omnix_connect_owner_token_v1");
+  if (!token) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    token = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    localStorage.setItem("omnix_connect_owner_token_v1", token);
+  }
+  return token;
+}
+async function gmailCommandRequest(path, options = {}) {
+  const headers = { Authorization: "Bearer " + getGmailOwnerToken(), ...(options.headers || {}) };
+  if (options.body) headers["Content-Type"] = "application/json";
+  const response = await fetch(GMAIL_CONNECT_API + path, { ...options, headers, cache: "no-store" });
+  const data = await response.json().catch(() => ({ error: "Invalid Gmail connector response." }));
+  if (!response.ok) throw new Error(data.error || ("Gmail connector HTTP " + response.status));
+  return data;
+}
+async function handleGmailCommand(command, pending) {
+  const text = String(command || "").trim();
+  const sendMatch = text.match(/^(?:hey omnix[,! ]*)?please?\s*(?:send)(?: an?)?\s+email\s+to\s+([^\s,]+)\s+subject\s*[:=]\s*([\s\S]+?)\s+body\s*[:=]\s*([\s\S]+)$/i)
+    || text.match(/^(?:hey omnix[,! ]*)?send(?: an?)?\s+email\s+to\s+([^\s,]+)\s+subject\s*[:=]\s*([\s\S]+?)\s+body\s*[:=]\s*([\s\S]+)$/i);
+  const deleteMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:email|message)\s+from\s+([^\s]+)\s+subject\s*[:=]\s*([\s\S]+)$/i);
+  const searchMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:email|message)\s+matching\s+([\s\S]+)$/i);
+  if (!sendMatch && !deleteMatch && !searchMatch) return false;
+  try {
+    const status = await gmailCommandRequest("/gmail/status");
+    if (!status.connected) {
+      pending.textContent = "Gmail isn't connected to this browser yet. Open Connectors → Gmail and connect it first.";
+      return true;
+    }
+    if (sendMatch) {
+      const to = sendMatch[1].trim(), subject = sendMatch[2].trim(), body = sendMatch[3].trim();
+      if (!to.includes("@") || !subject || !body) {
+        pending.textContent = "I couldn't understand that email. Use: Send email to person@example.com subject: Hello body: Your message.";
+        return true;
+      }
+      const prepared = await gmailCommandRequest("/gmail/send/prepare", { method: "POST", body: JSON.stringify({ to, subject, body }) });
+      const p = prepared.preview;
+      if (!confirm("OMNIX wants to send this email.\n\nTo: " + p.to + "\nSubject: " + p.subject + "\n\nMessage:\n" + p.body + "\n\nSend exactly this email?")) {
+        pending.textContent = "Sending cancelled. No email was sent.";
+        return true;
+      }
+      const result = await gmailCommandRequest("/gmail/send", { method: "POST", body: JSON.stringify({ approvalId: prepared.approvalId, to, subject, body, confirmation: "SEND EMAIL" }) });
+      pending.textContent = "✅ Email sent to " + to + ". Subject: " + subject + ".";
+      return true;
+    }
+    let query;
+    if (deleteMatch) {
+      const sender = deleteMatch[1].trim();
+      const subject = deleteMatch[2].trim().replace(/^["']|["']$/g, "");
+      query = "from:" + sender + ' subject:"' + subject.replace(/"/g, "") + '"';
+    } else {
+      query = searchMatch[1].trim().slice(0, 250);
+    }
+    const found = await gmailCommandRequest("/gmail/search?q=" + encodeURIComponent(query));
+    if (!found.messages || found.messages.length === 0) {
+      pending.textContent = "I couldn't find an email matching: " + query + ". Nothing was deleted.";
+      return true;
+    }
+    if (found.messages.length !== 1) {
+      pending.textContent = "I found " + found.messages.length + " matching emails, so I won't guess which one to delete. Narrow the search with a sender and exact subject, for example:\nDelete email from person@example.com subject: Invoice October\n\nNothing was deleted.";
+      return true;
+    }
+    const m = found.messages[0];
+    if (!confirm("Move this email to Gmail Trash?\n\nFrom: " + (m.from || "Unknown") + "\nSubject: " + (m.subject || "(No subject)") + "\nDate: " + (m.date || "Unknown") + "\n\nThis is reversible from Gmail Trash. OMNIX will not permanently delete it.")) {
+      pending.textContent = "Cancelled. The email was not moved.";
+      return true;
+    }
+    const prepared = await gmailCommandRequest("/gmail/trash/prepare", { method: "POST", body: JSON.stringify({ messageId: m.id }) });
+    const result = await gmailCommandRequest("/gmail/trash", { method: "POST", body: JSON.stringify({ approvalId: prepared.approvalId, messageId: m.id, confirmation: "MOVE TO TRASH" }) });
+    pending.textContent = "🗑️ " + result.message + "\nSubject: " + (m.subject || "(No subject)");
+    return true;
+  } catch (error) {
+    pending.textContent = "Gmail command failed: " + (error.message || "Unknown error") + "\nNo action is confirmed unless OMNIX explicitly says it succeeded.";
+    return true;
+  }
+}
+
 async function submitMessage() {
   const text = input.value.trim();
   if (!text || send.disabled) return;
@@ -186,6 +265,11 @@ async function submitMessage() {
   const pending = addMessage("Thinking…", "assistant");
 
   try {
+    if (await handleGmailCommand(text, pending)) {
+      conversation.push({ role: "assistant", content: pending.textContent });
+      statusLabel.textContent = "● GMAIL CONNECTOR";
+      return;
+    }
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
