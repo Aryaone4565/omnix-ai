@@ -37,10 +37,10 @@ A manifest entry is discovery metadata only. It does not mean a connector is imp
 ## Implementation stages
 
 1. **Architecture and manifest** — this document and `connectors/manifest.json`.
-2. **Authenticated connector registry** — D1 schema is now added to `omnix-memory`; authenticated CRUD routes and safe URL validation are still pending.
+2. **Gmail first connector** — backend deployed with Gmail OAuth/PKCE flow, encrypted token storage, inbox listing, message reading, and a one-time approval bound to exact email content before sending. Google OAuth client setup remains a manual prerequisite.
 3. **MCP client** — a compatible remote transport, capability discovery, schema validation, timeouts, and output limits.
 4. **Approval workflow** — review and confirm side-effecting tool calls.
 5. **Connectors UI** — Discover, Connected, and Custom Connectors.
 6. **Provider integrations** — implement and test each provider's supported API separately.
 
-The D1 tables for connector configs, approvals, audit events, and OAuth states have been created in the existing `omnix-memory` database. The current manifest is still a roadmap/catalog, not a working integration list. No messaging provider is connected by adding a manifest entry alone.
+The D1 tables for connector configs, approvals, audit events, and OAuth states are created in the existing `omnix-memory` database. A separate `omnix-connect` Worker is deployed and the Gmail backend routes and front-end workflow are implemented. Gmail is not usable until the owner adds `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Cloudflare and configures the OAuth client redirect URI. The remaining provider entries are roadmap/catalog items.
