@@ -37,10 +37,10 @@ A manifest entry is discovery metadata only. It does not mean a connector is imp
 ## Implementation stages
 
 1. **Architecture and manifest** — this document and `connectors/manifest.json`.
-2. **Authenticated connector registry** — per-user D1 records, authenticated CRUD routes, and safe URL validation.
+2. **Authenticated connector registry** — D1 schema is now added to `omnix-memory`; authenticated CRUD routes and safe URL validation are still pending.
 3. **MCP client** — a compatible remote transport, capability discovery, schema validation, timeouts, and output limits.
 4. **Approval workflow** — review and confirm side-effecting tool calls.
 5. **Connectors UI** — Discover, Connected, and Custom Connectors.
 6. **Provider integrations** — implement and test each provider's supported API separately.
 
-The current manifest is a roadmap/catalog, not a working integration list. No messaging provider is connected by adding a manifest entry alone.
+The D1 tables for connector configs, approvals, audit events, and OAuth states have been created in the existing `omnix-memory` database. The current manifest is still a roadmap/catalog, not a working integration list. No messaging provider is connected by adding a manifest entry alone.
