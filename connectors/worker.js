@@ -101,7 +101,7 @@ async function route(request, env) {
     const expires=new Date(Date.now()+10*60*1000).toISOString();
     await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_oauth_states (state_hash,owner_id,connector_key,code_verifier_encrypted,expires_at) VALUES (?,?,?,?,?)").bind(await sha(state),owner,"gmail",await seal(env,{verifier}),expires).run();
     const auth=new URL(GOOGLE_AUTH);
-    for(const [k,v] of Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:redirectUri(request),response_type:"code",scope:"https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send",access_type:"offline",prompt:"consent",state,code_challenge:challenge,code_challenge_method:"S256"})) auth.searchParams.set(k,v);
+    for(const [k,v] of Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:redirectUri(request),response_type:"code",scope:"https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify",access_type:"offline",prompt:"consent",state,code_challenge:challenge,code_challenge_method:"S256"})) auth.searchParams.set(k,v);
     return json({authUrl:auth.toString()});
   }
   const owner=await requireOwner(request,env);
@@ -119,6 +119,16 @@ async function route(request, env) {
       await audit(env,owner,"gmail.list_messages","success",cfg.id,"gmail.list_messages",{count:messages.length});
       return json({messages});
     } catch(e) { await audit(env,owner,"gmail.list_messages","error",cfg.id,"gmail.list_messages",{}); return json({error:String(e.message||e)},502); }
+  }
+  if(url.pathname==="/gmail/search"&&request.method==="GET") {
+    const q=String(url.searchParams.get("q")||"").trim().slice(0,250);
+    if(!q) return json({error:"Provide a Gmail search query."},400);
+    try {
+      const list=await gmailFetch(env,cfg,"/messages?maxResults=10&q="+encodeURIComponent(q));
+      const messages=await Promise.all((list.messages||[]).slice(0,10).map(m=>messageDetails(env,cfg,m.id)));
+      await audit(env,owner,"gmail.search","success",cfg.id,"gmail.search",{count:messages.length});
+      return json({messages,query:q});
+    } catch(e) { await audit(env,owner,"gmail.search","error",cfg.id,"gmail.search",{}); return json({error:String(e.message||e)},502); }
   }
   if(url.pathname==="/gmail/message"&&request.method==="GET") {
     const id=url.searchParams.get("id")||"";
@@ -151,6 +161,32 @@ async function route(request, env) {
       return json({sent:true,messageId:result.id||"",threadId:result.threadId||"",message:"Gmail accepted the message for sending."});
     } catch(e) { await audit(env,owner,"gmail.send","error",cfg.id,"gmail.send",{to,subject}); return json({error:String(e.message||e)},502); }
   }
+  if(url.pathname==="/gmail/trash/prepare"&&request.method==="POST") {
+    const b=await bodyJson(request), messageId=String(b?.messageId||"");
+    if(!/^[A-Za-z0-9_-]{1,200}$/.test(messageId)) return json({error:"Invalid message ID."},400);
+    try {
+      const message=await messageDetails(env,cfg,messageId);
+      const approvalId=crypto.randomUUID(), expires=new Date(Date.now()+3*60*1000).toISOString();
+      const argsHash=await sha(JSON.stringify({messageId}));
+      await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_approvals (id,owner_id,connector_id,tool_name,arguments_hash,arguments_preview,expires_at) VALUES (?,?,?,?,?,?,?)").bind(approvalId,owner,cfg.id,"gmail.trash",argsHash,JSON.stringify({from:message.from,subject:message.subject,date:message.date}),expires).run();
+      await audit(env,owner,"gmail.trash.prepare","pending",cfg.id,"gmail.trash",{subject:message.subject||""});
+      return json({approvalId,expiresAt:expires,message});
+    } catch(e) { return json({error:String(e.message||e)},502); }
+  }
+  if(url.pathname==="/gmail/trash"&&request.method==="POST") {
+    const b=await bodyJson(request), messageId=String(b?.messageId||"");
+    if(!b?.approvalId||b.confirmation!=="MOVE TO TRASH"||!/^[A-Za-z0-9_-]{1,200}$/.test(messageId)) return json({error:"Review the message and explicitly confirm moving it to Trash."},400);
+    const argsHash=await sha(JSON.stringify({messageId}));
+    const approval=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_approvals WHERE id=? AND owner_id=? AND connector_id=? AND tool_name='gmail.trash' AND arguments_hash=? AND used_at IS NULL AND expires_at>?").bind(b.approvalId,owner,cfg.id,argsHash,new Date().toISOString()).first();
+    if(!approval) return json({error:"Approval expired or does not match this exact email. Prepare the action again."},409);
+    const used=await env.OMNIX_DB.prepare("UPDATE omnix_connector_approvals SET used_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND used_at IS NULL").bind(b.approvalId).run();
+    if(!used.meta?.changes) return json({error:"This approval has already been used."},409);
+    try {
+      await gmailFetch(env,cfg,"/messages/"+encodeURIComponent(messageId)+"/trash",{method:"POST"});
+      await audit(env,owner,"gmail.trash","success",cfg.id,"gmail.trash",{messageId});
+      return json({trashed:true,message:"Email moved to Gmail Trash. It was not permanently deleted."});
+    } catch(e) { await audit(env,owner,"gmail.trash","error",cfg.id,"gmail.trash",{}); return json({error:String(e.message||e)},502); }
+  }
   if(url.pathname==="/gmail/disconnect"&&request.method==="POST") {
     await env.OMNIX_DB.prepare("UPDATE omnix_connector_configs SET encrypted_credentials=NULL,status='revoked',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(cfg.id).run();
     await audit(env,owner,"gmail.disconnect","success",cfg.id,"gmail.disconnect",{});
@@ -177,7 +213,7 @@ async function oauthCallback(request,env) {
     if(!creds.refresh_token) throw new Error("Google did not return a refresh token. Remove OMNIX from your Google account's third-party access and reconnect.");
     const encrypted=await seal(env,creds),id=prior?.id||crypto.randomUUID();
     if(prior) await env.OMNIX_DB.prepare("UPDATE omnix_connector_configs SET encrypted_credentials=?,status='connected',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(encrypted,id).run();
-    else await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_configs (id,owner_id,connector_key,display_name,connector_type,endpoint_url,encrypted_credentials,requested_permissions,enabled_tools,status) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,row.owner_id,"gmail","Gmail","remote",null,encrypted,JSON.stringify(["gmail.readonly","gmail.send"]),JSON.stringify(["gmail.list_messages","gmail.read_message","gmail.send"]), "connected").run();
+    else await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_configs (id,owner_id,connector_key,display_name,connector_type,endpoint_url,encrypted_credentials,requested_permissions,enabled_tools,status) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,row.owner_id,"gmail","Gmail","remote",null,encrypted,JSON.stringify(["gmail.readonly","gmail.send","gmail.modify"]),JSON.stringify(["gmail.list_messages","gmail.read_message","gmail.send","gmail.trash"]), "connected").run();
     await audit(env,row.owner_id,"gmail.connect","success",id,"gmail.oauth",{});
     return redirectToApp("connected");
   } catch(e) { console.error("Gmail OAuth callback:",String(e.message||e)); return htmlPage("Gmail connection failed",String(e.message||"Unknown error").slice(0,300)); }
