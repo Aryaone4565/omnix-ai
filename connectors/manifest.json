@@ -7,12 +7,12 @@
       "id": "gmail",
       "name": "Gmail",
       "type": "remote",
-      "status": "planned",
+      "status": "backend-deployed-needs-google-oauth",
       "capabilities": [
-        "list_conversations",
+        "list_messages",
         "read_message",
-        "draft_reply",
-        "send_email"
+        "prepare_send",
+        "send_with_explicit_confirmation"
       ],
       "auth": "oauth",
       "sideEffectsRequireApproval": true
