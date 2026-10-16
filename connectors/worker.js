@@ -84,13 +84,14 @@ async function messageDetails(env, config, id) {
 function base64urlBytes(str) { return btoa(unescape(encodeURIComponent(str))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,""); }
 async function route(request, env) {
   const url=new URL(request.url);
+  const origin=request.headers.get("Origin")||"";
   if(request.method==="OPTIONS") {
-    if(url.origin!==new URL("https://arya4565.github.io").origin) return new Response(null,{status:403});
+    if(origin!==ALLOWED_ORIGIN) return new Response(null,{status:403});
     return new Response(null,{status:204,headers:{"Access-Control-Allow-Origin":ALLOWED_ORIGIN,"Access-Control-Allow-Methods":"GET,POST,OPTIONS","Access-Control-Allow-Headers":"Content-Type,Authorization","Vary":"Origin"}});
   }
   if(url.pathname==="/health"&&request.method==="GET") return json({service:"OMNIX Connect Gmail",status:"online",gmailOAuthConfigured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),encryptionConfigured:Boolean(env.OMNIX_ENCRYPTION_KEY)});
   if(url.pathname===CALLBACK_PATH&&request.method==="GET") return await oauthCallback(request,env);
-  if(url.origin!==new URL("https://arya4565.github.io").origin) return json({error:"Origin not allowed."},403);
+  if(origin!==ALLOWED_ORIGIN) return json({error:"Origin not allowed."},403);
   if(!env.OMNIX_DB) return json({error:"D1 binding OMNIX_DB is missing."},500);
   if(url.pathname==="/gmail/connect"&&request.method==="POST") {
     if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET) return json({error:"Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the omnix-connect Worker after creating OAuth credentials."},503);
