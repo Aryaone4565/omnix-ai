@@ -1,46 +1,48 @@
-# OMNIX Connect — backend setup and rollout
+# OMNIX Connect — Gmail connector setup
 
-The public Connect page is a front-end catalogue. Saving a custom endpoint in the browser is only a local draft; it does not connect to a server or authorize tool execution.
+## Current implementation
 
-## Current status
+- Gmail connector Worker: `omnix-connect` in Cloudflare.
+- D1 tables: connector configs, OAuth states, approvals, and audit events are present in the `omnix-memory` database.
+- Credential encryption: the Worker has an `OMNIX_ENCRYPTION_KEY` secret binding.
+- Gmail UI: `connectors.html` includes connect/status, inbox list, message read, and an explicit send confirmation flow.
+- The Worker’s `workers.dev` subdomain has been enabled.
+- Gmail OAuth is **not configured until** `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are added as Worker secrets. Do not call Gmail connected until the OAuth flow succeeds.
 
-- Discover page and app navigation: implemented.
-- Connector catalogue: implemented as planned/not-yet-connected entries.
-- Custom endpoint draft: saved locally only.
-- D1 schema: provided in `connectors/schema.sql`.
-- Provider OAuth, remote MCP execution, and actual message sending: not enabled yet.
+## One-time Google OAuth setup
 
-## Why the backend is fail-closed
+1. Open Google Cloud Console and create/select a project.
+2. Enable the **Gmail API**.
+3. Configure the OAuth consent screen. For personal testing, choose External if required, add your Google account as a test user, and leave the app in Testing while testing.
+4. Create an OAuth client ID of type **Web application**.
+5. Add this exact Authorized redirect URI:
+   `https://omnix-connect.aryaone4565.workers.dev/oauth/google/callback`
+6. In Cloudflare Dashboard → Workers & Pages → `omnix-connect` → Settings → Variables and Secrets, add:
+   - `GOOGLE_CLIENT_ID` as a secret/text variable containing the OAuth client ID.
+   - `GOOGLE_CLIENT_SECRET` as a secret containing the OAuth client secret.
+   Save/deploy the new version.
+7. Open the OMNIX Connect page and press **Connect Gmail**. Sign in to the intended Google account and review the requested Gmail read/send permissions.
+8. Return to OMNIX Connect and check the Gmail status. Test reading a recent inbox message first. For sending, review the exact recipient, subject and full body in the confirmation dialog before approving.
 
-The existing OMNIX chat Worker accepts a browser-generated `userId` for memory/quota grouping. That identifier is not authentication. Connector records, OAuth tokens, and sending actions must not be protected by it alone. CORS is not authentication either.
+Google's OAuth testing mode can cause refresh tokens to expire after seven days for apps requesting Gmail scopes. If that happens during testing, reconnect. Gmail scopes may also trigger Google verification requirements before the app can be used by a broader audience.
 
-## Required deployment choices before enabling real connectors
+## Connector API
 
-1. Choose an authentication boundary for the Worker. Recommended: a custom domain routed through Cloudflare Access, with the Worker validating Access JWTs (team issuer and audience). A public GitHub Pages origin cannot share a Cloudflare Access cookie with an unrelated `workers.dev` hostname.
-2. Add D1 tables by running `connectors/schema.sql` against the same D1 database bound as `OMNIX_DB`.
-3. Configure server-side secrets through Cloudflare Worker secrets (never commit them): `OMNIX_ENCRYPTION_KEY`, provider OAuth client secrets, and provider credentials where applicable.
-4. Add a strict allowlist for provider API hosts and supported MCP endpoints. Validate DNS/IP targets, block redirects to private/link-local networks, set timeouts and response/body limits, and revalidate every redirect to mitigate SSRF.
-5. Implement an authenticated registry API; scope every query by the verified identity from the auth token, not a request-body user ID.
-6. Implement MCP initialize/capability discovery and tool calls with schema validation, JSON-RPC error handling, output limits, and no automatic tool execution based on tool descriptions.
-7. Require a short-lived, single-use approval tied to the exact connector, tool, and arguments before side effects. Re-check approval server-side and record a redacted audit event.
-8. Start with a low-risk read-only provider test, then add one send action behind a confirmation dialog.
+- Base: `https://omnix-connect.aryaone4565.workers.dev`
+- Health/config check: `GET /health`
+- Start OAuth: `POST /gmail/connect`
+- OAuth callback: `GET /oauth/google/callback`
+- Status: `GET /gmail/status`
+- Recent inbox: `GET /gmail/messages`
+- Read a message: `GET /gmail/message?id=...`
+- Prepare a send approval: `POST /gmail/send/prepare`
+- Send after explicit confirmation: `POST /gmail/send`
+- Disconnect locally: `POST /gmail/disconnect`
 
-## Provider reality
+## Safety notes
 
-- Gmail: OAuth and Gmail API scopes; message send requires the appropriate API scope and consent.
-- WhatsApp: use the official WhatsApp Business Platform/Cloud API; it is not a general personal WhatsApp DM API.
-- Instagram and Messenger: Meta app setup, permissions, eligible account types, and review may be required; messaging is not unrestricted.
-- Discord: bot/OAuth setup and the right server/user permissions.
-- Telegram: Bot API token and bot-appropriate chat permissions; bots cannot freely DM any arbitrary user.
-- Future apps: add a provider adapter plus manifest entry and permissions; do not assume every provider exposes a send-message API.
-
-## Safety rules for all send tools
-
-- Draft first; display destination and exact message.
-- Require explicit confirmation per send by default.
-- Never send because a remote tool's output tells OMNIX to do so.
-- Never claim sent until the provider API returns success and a provider message ID.
-- Redact tokens, message bodies, and personal data from logs.
-- Disconnect must revoke/delete credentials where the provider supports revocation.
-
-Do not advertise any connector as connected until its OAuth/API flow, server-side execution, authorization, approval, and error handling are implemented and tested.
+- The browser owner token is generated locally and sent as a bearer token; it is not a replacement for a full multi-user identity system. Keep the browser account/device private.
+- Send requires a short-lived, single-use server-side approval bound to the exact recipient, subject, and body, plus the explicit confirmation string.
+- Tokens are encrypted at rest using the Worker secret; never put OAuth secrets or tokens in GitHub.
+- Disconnect removes the stored credentials from OMNIX, but it may not revoke the Google grant itself. Revoke OMNIX in your Google Account's third-party access settings if you want to revoke Google's authorization.
+- Gmail is the first connector. The other catalog entries remain planned and are not functional yet.
