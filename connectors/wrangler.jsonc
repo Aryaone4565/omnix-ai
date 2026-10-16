@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "omnix-connect",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-16",
+  "keep_vars": true,
+  "d1_databases": [
+    {
+      "binding": "OMNIX_DB",
+      "database_name": "omnix-memory",
+      "database_id": "019f5bdd-99a9-4946-89de-00a67a51ac0b"
+    }
+  ],
+  "vars": {
+    "GOOGLE_CLIENT_ID": "547300772581-aqso84ebkmj6hacap0e1gt9gtporjkbp.apps.googleusercontent.com"
+  }
+}
