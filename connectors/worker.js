@@ -1,4 +1,4 @@
-const ALLOWED_ORIGIN = "https://arya4565.github.io";
+const ALLOWED_ORIGIN = "https://aryaone4565.github.io";
 const CALLBACK_PATH = "/oauth/google/callback";
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
@@ -50,7 +50,7 @@ async function audit(env, owner, action, outcome, connectorId=null, tool=null, d
   await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_audit (id,owner_id,connector_id,action,tool_name,outcome,detail_redacted) VALUES (?,?,?,?,?,?,?)")
     .bind(crypto.randomUUID(),owner,connectorId,action,tool,outcome,JSON.stringify(detail).slice(0,1000)).run();
 }
-function redirectToApp(flag) { return Response.redirect("https://arya4565.github.io/omnix-ai/connectors.html?gmail="+encodeURIComponent(flag),303); }
+function redirectToApp(flag) { return Response.redirect("https://aryaone4565.github.io/omnix-ai/connectors.html?gmail="+encodeURIComponent(flag),303); }
 function redirectUri(request) { return new URL(CALLBACK_PATH,new URL(request.url).origin).toString(); }
 async function gmailConfig(env, owner) {
   return env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='gmail' LIMIT 1").bind(owner).first();
