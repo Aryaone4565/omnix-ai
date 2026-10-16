@@ -86,7 +86,7 @@ async function route(request, env) {
   const url=new URL(request.url);
   if(request.method==="OPTIONS") {
     if(url.origin!==new URL("https://arya4565.github.io").origin) return new Response(null,{status:403});
-    return new Response(null,{status:204,headers:{"Access-Control-Allow-Origin":ALLOWED_ORIGIN,"Access-Control-Allow-Methods":"GET,POST,OPTIONS","Access-Control-Allow-Headers":"Content-Type,Authorization","Vary":"Origin"});
+    return new Response(null,{status:204,headers:{"Access-Control-Allow-Origin":ALLOWED_ORIGIN,"Access-Control-Allow-Methods":"GET,POST,OPTIONS","Access-Control-Allow-Headers":"Content-Type,Authorization","Vary":"Origin"}});
   }
   if(url.pathname==="/health"&&request.method==="GET") return json({service:"OMNIX Connect Gmail",status:"online",gmailOAuthConfigured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),encryptionConfigured:Boolean(env.OMNIX_ENCRYPTION_KEY)});
   if(url.pathname===CALLBACK_PATH&&request.method==="GET") return await oauthCallback(request,env);
