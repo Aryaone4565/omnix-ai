@@ -1,6 +1,6 @@
 # OMNIX Connectors
 
-OMNIX Connect is designed as an extensible integration layer for remote services and user-added MCP servers. The existing chat, persistent memory, Gemini fallback chain, and Live Voice must remain independent of connector availability.
+OMNIX Connect is an extensible integration layer for remote services and user-added MCP servers. The existing chat, persistent memory, Gemini fallback chain, and Live Voice remain independent of connector availability.
 
 ## Connector types
 
@@ -10,6 +10,16 @@ OMNIX Connect is designed as an extensible integration layer for remote services
 - `mcp-custom`: a user-added MCP server configuration.
 
 A manifest entry is discovery metadata only. It does not mean a connector is implemented, connected, or authorized.
+
+## Current deployment
+
+- Main website: `https://arya4565.github.io/omnix-ai/`
+- Dedicated connector Worker source: `connectors/worker.js`
+- Dedicated Wrangler configuration: `connectors/wrangler.jsonc`
+- Existing D1 database: `omnix-memory`, bound to the connector Worker as `OMNIX_DB`
+- D1 schema: `connectors/schema.sql` (connector tables and indexes applied)
+- Public Google OAuth Client ID is a non-secret variable; the Google Client Secret and encryption key stay in Cloudflare Secrets.
+- Do not deploy the connector config from the repository root without the explicit config path. Use `npx wrangler deploy --config connectors/wrangler.jsonc` from the repository root.
 
 ## Planned connector lifecycle
 
@@ -43,4 +53,4 @@ A manifest entry is discovery metadata only. It does not mean a connector is imp
 5. **Connectors UI** — Discover, Connected, and Custom Connectors.
 6. **Provider integrations** — implement and test each provider's supported API separately.
 
-The D1 tables for connector configs, approvals, audit events, and OAuth states are created in the existing `omnix-memory` database. A separate `omnix-connect` Worker is deployed and the Gmail backend routes and front-end workflow are implemented. Gmail is not usable until the owner adds `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Cloudflare and configures the OAuth client redirect URI. The remaining provider entries are roadmap/catalog items.
+Gmail is not usable until the owner adds `GOOGLE_CLIENT_SECRET` in Cloudflare and the Google OAuth flow succeeds. The remaining provider entries are roadmap/catalog items, not implemented connectors.
