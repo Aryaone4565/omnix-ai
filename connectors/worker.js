@@ -114,6 +114,12 @@ async function route(request, env) {
     ]);
     return json({whatsapp:wa?.status==="connected",instagram:meta?.status==="connected",messenger:meta?.status==="connected",metaConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET)});
   }
+  if(url.pathname==="/meta/pages"&&request.method==="GET") {
+    const c=await env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(owner).first();
+    if(!c||c.status!=="connected"||!c.encrypted_credentials) return json({error:"Connect Instagram/Messenger first."},409);
+    const creds=await openSeal(env,c.encrypted_credentials);
+    return json({pages:(creds.pages||[]).map(p=>({id:p.id,name:p.name,instagram:p.instagram_business_account?{id:String(p.instagram_business_account.id),username:p.instagram_business_account.username||""}:null}))});
+  }
   if(url.pathname==="/whatsapp/configure"&&request.method==="POST") {
     const b=await bodyJson(request),phoneNumberId=String(b?.phoneNumberId||"").trim(),wabaId=String(b?.businessAccountId||"").trim(),accessToken=String(b?.accessToken||"").trim();
     if(!/^\\d{5,30}$/.test(phoneNumberId)||!/^\\d{5,30}$/.test(wabaId)||accessToken.length<30||accessToken.length>5000) return json({error:"Provide a valid WhatsApp Phone Number ID, WhatsApp Business Account ID, and access token."},400);
