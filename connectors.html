@@ -26,7 +26,7 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
 <div class="notice"><strong>Connector setup:</strong> Gmail has its own connector. WhatsApp Business, Instagram and Facebook Messenger share a Meta authorization flow. Meta messaging requires a configured Meta developer app, eligible business assets and approved permissions. Custom server entries remain local drafts.</div>
 <div class="tabs" role="tablist"><button class="tab active" data-tab="discover">Discover</button><button class="tab" data-tab="connected">Connected</button><button class="tab" data-tab="custom">Custom connectors</button></div>
 <section id="discover">
-<div class="section-title"><h2>Popular integrations</h2><span class="count">6 planned connectors</span></div>
+<div class="section-title"><h2>Popular integrations</h2><span class="count">4 connectors</span></div>
 <div class="grid" id="catalog"></div>
 </section>
 <section id="connected" class="hidden"><div class="section-title"><h2>Connected apps</h2></div><div class="empty" id="connectedEmpty">No apps connected yet. Start with Gmail in Discover.</div><div class="grid hidden" id="connectedGrid"></div>
@@ -94,12 +94,10 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
 </main>
 <script>
 const catalog=[
-{id:"gmail",name:"Gmail",icon:"📧",status:"PLANNED",description:"Compose emails and prepare replies using supported Gmail API permissions.",caps:["Search email","Draft reply","Send email"]},
-{id:"whatsapp-business",name:"WhatsApp Business",icon:"💚",status:"PLANNED",description:"Messaging through eligible WhatsApp Business Platform integrations.",caps:["Send message","Reply"]},
-{id:"instagram-messaging",name:"Instagram",icon:"📸",status:"PLANNED",description:"Messaging actions available to eligible professional accounts and approved apps.",caps:["Conversations","Reply"]},
-{id:"discord",name:"Discord",icon:"🎮",status:"PLANNED",description:"Use an authorized bot or supported OAuth integration to message where permitted.",caps:["Send message","Reply"]},
-{id:"telegram",name:"Telegram",icon:"✈️",status:"PLANNED",description:"Add Telegram bot messaging with explicitly configured permissions.",caps:["Send message","Reply"]},
-{id:"messenger",name:"Messenger",icon:"💬",status:"PLANNED",description:"Messaging features subject to Meta API eligibility and permissions.",caps:["Conversations","Reply"]}
+{id:"gmail",name:"Gmail",icon:"📧",status:"BUILT",description:"Read, search and send email, with confirmation before sending.",caps:["Read email","Search","Send email"]},
+{id:"whatsapp-business",name:"WhatsApp Business",icon:"💚",status:"SETUP REQUIRED",description:"Send WhatsApp messages using your authorized Business Platform credentials.",caps:["Send message","Encrypted token"]},
+{id:"instagram-messaging",name:"Instagram",icon:"📸",status:"SETUP REQUIRED",description:"Send messages through an eligible Instagram professional account linked to a Facebook Page.",caps:["Meta authorization","Send message"]},
+{id:"messenger",name:"Facebook Messenger",icon:"💬",status:"SETUP REQUIRED",description:"Send messages through a Facebook Page and approved Meta permissions.",caps:["Meta authorization","Send message"]}
 ];
 const $=id=>document.getElementById(id);
 function getCustom(){try{const v=JSON.parse(localStorage.getItem("omnix_connect_custom_configs_v1")||"[]");return Array.isArray(v)?v:[]}catch{return []}}
