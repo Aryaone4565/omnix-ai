@@ -254,24 +254,24 @@ async function handleGmailCommand(command, pending) {
 
 async function handleSocialCommand(command, pending) {
   const text = String(command || "").trim();
-  const waMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\\s+)?(?:send|reply(?:\\s+on)?)\\s+(?:a\\s+)?whatsapp(?:\\s+business)?\\s+(?:message\\s+)?to\\s+(\\+?[0-9][0-9\\s()+-]{6,22})\\s*[:=]\\s*([\\s\\S]+)$/i);
-  const metaMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\\s+)?(?:send|reply(?:\\s+on)?)\\s+(instagram(?:\\s+dm)?|messenger|facebook messenger)\\s+(?:message\\s+)?from\\s+(?:page\\s+)?(?:id\\s+)?([0-9]{3,30})\\s+to\\s+(?:recipient\\s+)?(?:id\\s+)?([0-9]{3,40})\\s*[:=]\\s*([\\s\\S]+)$/i);
+  const waMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:send|reply(?:\s+on)?)\s+(?:a\s+)?whatsapp(?:\s+business)?\s+(?:message\s+)?to\s+(\+?[0-9][0-9\s()+-]{6,22})\s*[:=]\s*([\s\S]+)$/i);
+  const metaMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:send|reply(?:\s+on)?)\s+(instagram(?:\s+dm)?|messenger|facebook messenger)\s+(?:message\s+)?from\s+(?:page\s+)?(?:id\s+)?([0-9]{3,30})\s+to\s+(?:recipient\s+)?(?:id\s+)?([0-9]{3,40})\s*[:=]\s*([\s\S]+)$/i);
   if (!waMatch && !metaMatch) return false;
   try {
     if (waMatch) {
-      const to = waMatch[1].replace(/[\\s()+-]/g, ""), message = waMatch[2].trim();
+      const to = waMatch[1].replace(/[\s()+-]/g, ""), message = waMatch[2].trim();
       const status = await gmailCommandRequest("/social/status");
       if (!status.whatsapp) {
         pending.textContent = "WhatsApp Business isn't connected yet. Open OMNIX Connect → WhatsApp Business and connect an eligible WhatsApp Business Platform account first.";
         return true;
       }
-      if (!/^\\d{8,15}$/.test(to) || !message || message.length > 4000) {
+      if (!/^\d{8,15}$/.test(to) || !message || message.length > 4000) {
         pending.textContent = "I couldn't understand that WhatsApp message. Use: Send WhatsApp message to 919876543210: Hello there!";
         return true;
       }
       const prepared = await gmailCommandRequest("/whatsapp/send/prepare", { method: "POST", body: JSON.stringify({ to, message }) });
       const p = prepared.preview;
-      if (!confirm("OMNIX wants to send this WhatsApp message.\\n\\nTo: " + p.to + "\\n\\nMessage:\\n" + p.message + "\\n\\nSend exactly this message?")) {
+      if (!confirm("OMNIX wants to send this WhatsApp message.\n\nTo: " + p.to + "\n\nMessage:\n" + p.message + "\n\nSend exactly this message?")) {
         pending.textContent = "Sending cancelled. No WhatsApp message was sent.";
         return true;
       }
@@ -293,7 +293,7 @@ async function handleSocialCommand(command, pending) {
     }
     const prepared = await gmailCommandRequest("/meta/send/prepare", { method: "POST", body: JSON.stringify({ platform, pageId, recipientId, message }) });
     const p = prepared.preview;
-    if (!confirm("OMNIX wants to send this " + (platform === "instagram" ? "Instagram DM" : "Messenger message") + ".\\n\\nPage ID: " + p.pageId + "\\nRecipient ID: " + p.recipientId + "\\n\\nMessage:\\n" + p.message + "\\n\\nSend exactly this message?")) {
+    if (!confirm("OMNIX wants to send this " + (platform === "instagram" ? "Instagram DM" : "Messenger message") + ".\n\nPage ID: " + p.pageId + "\nRecipient ID: " + p.recipientId + "\n\nMessage:\n" + p.message + "\n\nSend exactly this message?")) {
       pending.textContent = "Sending cancelled. No message was sent.";
       return true;
     }
@@ -301,7 +301,7 @@ async function handleSocialCommand(command, pending) {
     pending.textContent = "✅ " + (result.message || "The platform accepted the message.");
     return true;
   } catch (error) {
-    pending.textContent = "Social messaging command failed: " + (error.message || "Unknown error") + "\\nNo action is confirmed unless OMNIX explicitly says it succeeded.";
+    pending.textContent = "Social messaging command failed: " + (error.message || "Unknown error") + "\nNo action is confirmed unless OMNIX explicitly says it succeeded.";
     return true;
   }
 }
