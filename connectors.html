@@ -49,6 +49,17 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
   <div class="section-title"><h2>💬 Meta messaging</h2><span id="metaState" class="badge">CHECKING</span></div>
   <p style="color:var(--muted);font-size:13px">Connect eligible WhatsApp Business, Instagram professional, and Facebook Page assets. You must have permission to message the recipient. Review every message before sending.</p>
   <div class="actions"><button class="primary" id="connectMetaAgain" type="button">Connect / refresh Meta apps</button></div>
+  <div class="panel" style="margin:14px 0">
+    <h3>Connect WhatsApp Business Cloud API</h3>
+    <p style="color:var(--muted);font-size:13px">Enter the credentials from your Meta developer dashboard. The access token is encrypted on the server and isn't stored in browser local storage.</p>
+    <form id="whatsappSetupForm">
+      <div class="field"><label for="waPhoneNumberId">Phone Number ID</label><input id="waPhoneNumberId" required maxlength="30" inputmode="numeric" placeholder="WhatsApp Cloud API Phone Number ID"></div>
+      <div class="field"><label for="waBusinessAccountId">WhatsApp Business Account ID</label><input id="waBusinessAccountId" required maxlength="30" inputmode="numeric" placeholder="WhatsApp Business Account ID"></div>
+      <div class="field"><label for="waAccessToken">Access token</label><input id="waAccessToken" type="password" autocomplete="off" required minlength="30" maxlength="5000" placeholder="Paste your Meta access token"></div>
+      <div class="actions"><button class="primary" type="submit">Save WhatsApp connection</button><button class="tab" id="waDisconnect" type="button">Disconnect WhatsApp</button></div>
+    </form>
+    <div id="waSetupStatus" role="status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+  </div>
   <form id="metaCompose">
     <div class="field"><label for="metaConnector">App</label><select id="metaConnector" required><option value="whatsapp-business">WhatsApp Business</option><option value="instagram-messaging">Instagram</option><option value="messenger">Facebook Messenger</option></select></div>
     <div class="field"><label for="metaAsset">Connected account</label><select id="metaAsset" required><option value="">Connect Meta first</option></select></div>
@@ -133,17 +144,39 @@ $("connectMetaAgain").addEventListener("click",startMetaConnect);
 $("metaConnector").addEventListener("change",updateMetaAssets);
 $("metaCompose").addEventListener("submit",async e=>{
   e.preventDefault();
-  const connector=$("metaConnector").value,assetId=$("metaAsset").value,recipient=$("metaRecipient").value.trim(),message=$("metaMessage").value,status=$("metaComposeStatus");
+  const connector=$("metaConnector").value,assetId=$("metaAsset").value,recipient=$("metaRecipient").value.trim(),message=$("metaMessage").value.trim(),status=$("metaComposeStatus");
   status.textContent="Preparing message for review…";
   try {
-    const prepared=await gmailRequest("/meta/send/prepare",{method:"POST",body:JSON.stringify({connector,assetId,recipient,message})});
-    const p=prepared.preview;
-    const approved=confirm("SEND THIS MESSAGE?\n\nApp: "+p.connector+"\nAccount: "+p.account+"\nRecipient: "+p.recipient+"\n\nMessage:\n"+p.message+"\n\nChoose OK only if all details are correct.");
-    if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}
-    status.textContent="Sending…";
-    const result=await gmailRequest("/meta/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,connector,assetId,recipient,message,confirmation:"SEND MESSAGE"})});
-    status.textContent="Meta accepted the message. Message ID: "+(result.messageId||"not provided");
+    if(connector==="whatsapp-business"){
+      const to=recipient.replace(/[\\s()+-]/g,"");
+      const prepared=await gmailRequest("/whatsapp/send/prepare",{method:"POST",body:JSON.stringify({to,message})});
+      const p=prepared.preview;
+      if(!confirm("SEND WHATSAPP MESSAGE?\n\nTo: "+p.to+"\n\nMessage:\n"+p.message+"\n\nOnly continue if these details are correct.")){status.textContent="Sending cancelled. Nothing was sent.";return}
+      status.textContent="Sending…";
+      const result=await gmailRequest("/whatsapp/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,message,confirmation:"SEND MESSAGE"})});
+      status.textContent="WhatsApp accepted the message. Message ID: "+(result.messageId||"not provided");
+    } else {
+      const platform=connector==="instagram-messaging"?"instagram":"messenger";
+      const prepared=await gmailRequest("/meta/send/prepare",{method:"POST",body:JSON.stringify({platform,pageId:assetId,recipientId:recipient,message})});
+      const p=prepared.preview;
+      if(!confirm("SEND "+platform.toUpperCase()+" MESSAGE?\n\nAccount ID: "+assetId+"\nRecipient ID: "+recipient+"\n\nMessage:\n"+p.message+"\n\nOnly continue if these details are correct.")){status.textContent="Sending cancelled. Nothing was sent.";return}
+      status.textContent="Sending…";
+      const result=await gmailRequest("/meta/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,platform,pageId:assetId,recipientId:recipient,message,confirmation:"SEND MESSAGE"})});
+      status.textContent="Meta accepted the message. Message ID: "+(result.messageId||"not provided");
+    }
+    e.target.reset();
   } catch(err){status.textContent=err.message}
+});
+$("whatsappSetupForm").addEventListener("submit",async e=>{
+  e.preventDefault();const status=$("waSetupStatus");status.textContent="Saving encrypted credentials…";
+  try{
+    const result=await gmailRequest("/whatsapp/configure",{method:"POST",body:JSON.stringify({phoneNumberId:$("waPhoneNumberId").value.trim(),businessAccountId:$("waBusinessAccountId").value.trim(),accessToken:$("waAccessToken").value.trim()})});
+    status.textContent=result.message||"WhatsApp Business connected.";e.target.reset();await refreshMetaStatus();
+  }catch(err){status.textContent=err.message}
+});
+$("waDisconnect").addEventListener("click",async()=>{
+  if(!confirm("Disconnect WhatsApp Business from OMNIX?"))return;
+  try{await gmailRequest("/whatsapp/disconnect",{method:"POST",body:"{}"});$("waSetupStatus").textContent="WhatsApp disconnected.";await refreshMetaStatus()}catch(err){$("waSetupStatus").textContent=err.message}
 });
 $("disconnectGmail").addEventListener("click",async()=>{if(!confirm("Disconnect Gmail from OMNIX on this browser?"))return;try{await gmailRequest("/gmail/disconnect",{method:"POST",body:"{}"});await refreshGmailStatus()}catch(e){alert(e.message)}});
 $("gmailCompose").addEventListener("submit",async e=>{e.preventDefault();const to=$("gmailTo").value.trim(),subject=$("gmailSubject").value.trim(),body=$("gmailBody").value;const status=$("gmailComposeStatus");status.textContent="Preparing email for review…";try{const prepared=await gmailRequest("/gmail/send/prepare",{method:"POST",body:JSON.stringify({to,subject,body})});const p=prepared.preview;const approved=confirm("SEND THIS EMAIL?\n\nTo: "+p.to+"\nSubject: "+p.subject+"\n\nMessage:\n"+p.body+"\n\nChoose OK only if the recipient and full message are correct.");if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}status.textContent="Sending…";const result=await gmailRequest("/gmail/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,subject,body,confirmation:"SEND EMAIL"})});status.textContent="Sent successfully. Gmail message ID: "+result.messageId;$("gmailCompose").reset()}catch(err){status.textContent=err.message}});
