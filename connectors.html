@@ -48,6 +48,23 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
 <div id="metaWorkspace" class="panel" style="margin-top:14px">
   <div class="section-title"><h2>💬 Social messaging connectors</h2><span id="metaState" class="badge">CHECKING</span></div>
   <p style="color:var(--muted);font-size:13px">Connect only accounts you own or are authorized to manage. OMNIX asks you to review each message before sending. Platform messaging rules still apply.</p>
+  <div class="panel" id="metaSetupWizard">
+    <div class="section-title"><h3>⚡ One-tap Meta setup</h3><span id="metaSetupBadge" class="badge">CHECKING</span></div>
+    <p style="color:var(--muted);font-size:13px">OMNIX can start account authorization in one tap once Meta's app credentials are configured. Meta requires this initial developer setup; OMNIX cannot bypass it.</p>
+    <ol style="padding-left:22px;color:#d4d4d8;font-size:13px">
+      <li>Create/finish your <strong>OMNIX AI</strong> app in Meta for Developers.</li>
+      <li>In the app's settings, copy its App ID and App Secret.</li>
+      <li>In Cloudflare → Workers & Pages → <strong>omnix-connect</strong> → Settings → Variables and Secrets, set <code>META_APP_ID</code> as a text variable and <code>META_APP_SECRET</code> as a secret.</li>
+      <li>In the Meta app, add this exact OAuth redirect URI to the Facebook Login / OAuth settings:</li>
+    </ol>
+    <div class="field"><label for="metaCallbackUri">OMNIX OAuth callback URL</label><input id="metaCallbackUri" readonly value="https://omnix-connect.aryaone4565.workers.dev/oauth/meta/callback"></div>
+    <div class="actions">
+      <button class="tab" id="copyMetaCallback" type="button">Copy callback URL</button>
+      <button class="tab" id="openMetaDashboard" type="button">Open Meta Developer Apps</button>
+      <button class="primary" id="checkMetaSetup" type="button">Check setup & connect</button>
+    </div>
+    <p id="metaSetupNote" style="color:var(--muted);font-size:12px;margin-bottom:0" role="status">Your App Secret must stay in Cloudflare's secret settings. Never paste it into this page or into ChatGPT. Do not change OMNIX_ENCRYPTION_KEY.</p>
+  </div>
   <div class="panel">
     <h3>Instagram & Facebook Messenger</h3>
     <p style="color:var(--muted);font-size:13px">Requires a Meta developer app and a Facebook Page with approved permissions. Instagram messaging needs an eligible professional account linked to the Page.</p>
@@ -121,10 +138,15 @@ async function refreshMetaStatus(){
       metaStates["instagram-messaging"].assets=metaPages.filter(x=>x.instagram?.id).map(x=>({id:x.id,name:(x.instagram.username?"@"+x.instagram.username+" — ":"")+x.name}));
     }
     $("metaState").textContent=metaConnectedAny()?"CONNECTED":"SETUP REQUIRED";
+    $("metaSetupBadge").textContent=s.metaConfigured?"READY TO AUTHORIZE":"CREDENTIALS NEEDED";
+    $("metaSetupNote").textContent=s.metaConfigured
+      ?"Meta credentials are detected on the Worker. Tap “Check setup & connect” to authorize your Page and eligible Instagram account."
+      :"Finish the checklist above, then tap “Check setup & connect”. Keep META_APP_SECRET in Cloudflare Secret settings; never put it on this website.";
     $("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());
     updateMetaAssets();
   } catch(e) {
-    metaStates={};$("metaState").textContent="SETUP REQUIRED";
+    metaStates={};$("metaState").textContent="SETUP REQUIRED";$("metaSetupBadge").textContent="STATUS UNAVAILABLE";
+    $("metaSetupNote").textContent="Could not check connector status. Check your connection, then refresh this page.";
     $("connectedEmpty").classList.toggle("hidden",gmailConnected);updateMetaAssets();
   }
 }
@@ -140,6 +162,11 @@ async function refreshGmailStatus(){
   await refreshMetaStatus();$("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());renderCatalog();
 }
 async function startMetaConnect(){
+  if(!metaStates.metaConfigured){
+    $("metaSetupNote").textContent="Meta app credentials are not detected yet. Add META_APP_ID and META_APP_SECRET to the omnix-connect Worker, save, then retry. Keep the secret in Cloudflare.";
+    $("metaSetupWizard").scrollIntoView({behavior:"smooth",block:"start"});
+    return;
+  }
   try{const res=await gmailRequest("/meta/connect",{method:"POST",body:JSON.stringify({ownerToken:getOwnerToken()})});if(!res.authUrl)throw new Error("Meta did not return an authorization URL.");location.href=res.authUrl;}
   catch(e){alert(e.message)}
 }
@@ -150,6 +177,9 @@ async function loadInbox(){const root=$("gmailInbox");root.replaceChildren();con
 async function readMessage(id){const root=$("gmailInbox");try{const data=await gmailRequest("/gmail/message?id="+encodeURIComponent(id));root.replaceChildren();const card=document.createElement("article");card.className="card";const h=document.createElement("h3");h.textContent=data.message.subject||"(No subject)";const from=document.createElement("p");from.textContent="From: "+data.message.from;const to=document.createElement("p");to.textContent="To: "+data.message.to;const body=document.createElement("pre");body.style.whiteSpace="pre-wrap";body.style.overflowWrap="anywhere";body.textContent=data.body||data.message.snippet||"(No plain-text body available)";const back=document.createElement("button");back.className="tab";back.textContent="← Back to inbox";back.addEventListener("click",loadInbox);card.append(h,from,to,body,back);root.append(card)}catch(e){alert(e.message)}}
 $("refreshInbox").addEventListener("click",loadInbox);
 $("connectMetaAgain").addEventListener("click",startMetaConnect);
+$("checkMetaSetup").addEventListener("click",async()=>{await refreshMetaStatus();if(metaStates.metaConfigured){await startMetaConnect()}else{$("metaSetupNote").textContent="Not ready yet: add META_APP_ID and META_APP_SECRET to Cloudflare Worker settings, save, then tap this button again.";$("metaSetupWizard").scrollIntoView({behavior:"smooth",block:"start"})}});
+$("copyMetaCallback").addEventListener("click",async()=>{const value=$("metaCallbackUri").value;try{await navigator.clipboard.writeText(value);$("metaSetupNote").textContent="Callback URL copied. Paste it into your Meta app's OAuth redirect URI settings."}catch{$("metaCallbackUri").focus();$("metaCallbackUri").select();$("metaSetupNote").textContent="Select and copy the callback URL shown above, then paste it into Meta's OAuth redirect URI settings."}});
+$("openMetaDashboard").addEventListener("click",()=>window.open("https://developers.facebook.com/apps/","_blank","noopener,noreferrer"));
 $("metaPlatform").addEventListener("change",updateMetaAssets);
 $("metaCompose").addEventListener("submit",async e=>{
   e.preventDefault();const platform=$("metaPlatform").value,pageId=$("metaAsset").value,recipientId=$("metaRecipient").value.trim(),message=$("metaMessage").value,status=$("metaComposeStatus");status.textContent="Preparing message for review…";
