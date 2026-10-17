@@ -107,6 +107,21 @@ async function route(request, env) {
   }
   const owner=await requireOwner(request,env);
   if(!owner) return json({error:"Unauthorized. Open OMNIX Connect in your browser and try again."},401);
+  if(url.pathname==="/meta/status"&&request.method==="GET") {
+    const [wa,meta]=await Promise.all([
+      env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first(),
+      env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(owner).first()
+    ]);
+    const waAssets=[];
+    if(wa?.status==="connected"&&wa.encrypted_credentials) { try { const c=await openSeal(env,wa.encrypted_credentials); waAssets.push({id:c.phoneNumberId,name:"WhatsApp Business · "+c.phoneNumberId}); } catch {} }
+    let pages=[];
+    if(meta?.status==="connected"&&meta.encrypted_credentials) { try { const c=await openSeal(env,meta.encrypted_credentials); pages=c.pages||[]; } catch {} }
+    return json({
+      "whatsapp-business":{connected:waAssets.length>0,assets:waAssets},
+      "instagram-messaging":{connected:pages.some(p=>p.instagram_business_account),assets:pages.filter(p=>p.instagram_business_account).map(p=>({id:p.id,name:(p.instagram_business_account.username?"@"+p.instagram_business_account.username:"Instagram")+" · "+p.name}))},
+      "messenger":{connected:pages.length>0,assets:pages.map(p=>({id:p.id,name:p.name+" · Facebook Page"}))}
+    });
+  }
   if(url.pathname==="/social/status"&&request.method==="GET") {
     const [wa,meta]=await Promise.all([
       env.OMNIX_DB.prepare("SELECT status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first(),
