@@ -211,7 +211,9 @@ async function route(request, env) {
       const creds=await openSeal(env,c.encrypted_credentials),page=(creds.pages||[]).find(p=>p.id===pageId);
       if(!page?.access_token) throw new Error("That Page is not connected to this Meta account.");
       const payload={recipient:{id:recipientId},message:{text:message}};
-      const response=await fetch("https://graph.facebook.com/v22.0/"+encodeURIComponent(pageId)+"/messages?access_token="+encodeURIComponent(page.access_token),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const endpointId=platform==="instagram"?String(page.instagram_business_account?.id||""):pageId;
+      if(!endpointId) throw new Error("That Page has no connected Instagram professional account.");
+      const response=await fetch("https://graph.facebook.com/v22.0/"+encodeURIComponent(endpointId)+"/messages?access_token="+encodeURIComponent(page.access_token),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
       const data=await response.json().catch(()=>({}));
       if(!response.ok) throw new Error("Meta API HTTP "+response.status+": "+String(data.error?.message||"request failed").slice(0,160));
       await audit(env,owner,"meta.send","success",c.id,"meta.send",{platform,to:recipientId});
