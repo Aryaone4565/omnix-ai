@@ -45,29 +45,39 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
     <div id="gmailComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
   </div>
 </div>
-<div id="metaWorkspace" class="panel hidden" style="margin-top:14px">
-  <div class="section-title"><h2>💬 Meta messaging</h2><span id="metaState" class="badge">CHECKING</span></div>
-  <p style="color:var(--muted);font-size:13px">Connect eligible WhatsApp Business, Instagram professional, and Facebook Page assets. You must have permission to message the recipient. Review every message before sending.</p>
-  <div class="actions"><button class="primary" id="connectMetaAgain" type="button">Connect / refresh Meta apps</button></div>
-  <div class="panel" style="margin:14px 0">
-    <h3>Connect WhatsApp Business Cloud API</h3>
-    <p style="color:var(--muted);font-size:13px">Enter the credentials from your Meta developer dashboard. The access token is encrypted on the server and isn't stored in browser local storage.</p>
-    <form id="whatsappSetupForm">
-      <div class="field"><label for="waPhoneNumberId">Phone Number ID</label><input id="waPhoneNumberId" required maxlength="30" inputmode="numeric" placeholder="WhatsApp Cloud API Phone Number ID"></div>
-      <div class="field"><label for="waBusinessAccountId">WhatsApp Business Account ID</label><input id="waBusinessAccountId" required maxlength="30" inputmode="numeric" placeholder="WhatsApp Business Account ID"></div>
-      <div class="field"><label for="waAccessToken">Access token</label><input id="waAccessToken" type="password" autocomplete="off" required minlength="30" maxlength="5000" placeholder="Paste your Meta access token"></div>
-      <div class="actions"><button class="primary" type="submit">Save WhatsApp connection</button><button class="tab" id="waDisconnect" type="button">Disconnect WhatsApp</button></div>
+<div id="metaWorkspace" class="panel" style="margin-top:14px">
+  <div class="section-title"><h2>💬 Social messaging connectors</h2><span id="metaState" class="badge">CHECKING</span></div>
+  <p style="color:var(--muted);font-size:13px">Connect only accounts you own or are authorized to manage. OMNIX asks you to review each message before sending. Platform messaging rules still apply.</p>
+  <div class="panel">
+    <h3>Instagram & Facebook Messenger</h3>
+    <p style="color:var(--muted);font-size:13px">Requires a Meta developer app and a Facebook Page with approved permissions. Instagram messaging needs an eligible professional account linked to the Page.</p>
+    <div class="actions"><button class="primary" id="connectMetaAgain" type="button">Connect / refresh Instagram & Messenger</button></div>
+    <form id="metaCompose">
+      <div class="field"><label for="metaPlatform">Platform</label><select id="metaPlatform" required><option value="instagram">Instagram</option><option value="messenger">Facebook Messenger</option></select></div>
+      <div class="field"><label for="metaAsset">Facebook Page / linked Instagram account</label><select id="metaAsset" required><option value="">Connect Meta first</option></select></div>
+      <div class="field"><label for="metaRecipient">Recipient's platform-scoped ID</label><input id="metaRecipient" required maxlength="40" placeholder="Recipient ID from an eligible conversation"></div>
+      <div class="field"><label for="metaMessage">Message</label><textarea id="metaMessage" rows="3" required maxlength="2000" placeholder="Write your message..."></textarea></div>
+      <div class="actions"><button class="primary" type="submit">Review & send</button></div>
     </form>
-    <div id="waSetupStatus" role="status" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+    <div id="metaComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
   </div>
-  <form id="metaCompose">
-    <div class="field"><label for="metaConnector">App</label><select id="metaConnector" required><option value="whatsapp-business">WhatsApp Business</option><option value="instagram-messaging">Instagram</option><option value="messenger">Facebook Messenger</option></select></div>
-    <div class="field"><label for="metaAsset">Connected account</label><select id="metaAsset" required><option value="">Connect Meta first</option></select></div>
-    <div class="field"><label for="metaRecipient">Recipient ID or phone</label><input id="metaRecipient" required maxlength="200" placeholder="WhatsApp: country code + digits, no +; other apps: recipient-scoped ID"></div>
-    <div class="field"><label for="metaMessage">Message</label><textarea id="metaMessage" rows="4" required maxlength="4000" placeholder="Write your message..."></textarea></div>
-    <div class="actions"><button class="primary" type="submit">Review & send message</button></div>
-  </form>
-  <div id="metaComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
+  <div class="panel">
+    <h3>WhatsApp Business</h3>
+    <p style="color:var(--muted);font-size:13px">Requires a WhatsApp Business Platform phone number, Business Account ID and access token. Credentials are encrypted by OMNIX on the server. Never paste tokens into ChatGPT or share them. Ask the business/account owner to handle setup if needed.</p>
+    <form id="whatsappConfigForm">
+      <div class="field"><label for="waPhoneId">Phone Number ID</label><input id="waPhoneId" inputmode="numeric" maxlength="30" required placeholder="Meta Phone Number ID"></div>
+      <div class="field"><label for="waBusinessId">WhatsApp Business Account ID</label><input id="waBusinessId" inputmode="numeric" maxlength="30" required placeholder="WhatsApp Business Account ID"></div>
+      <div class="field"><label for="waAccessToken">Access token</label><input id="waAccessToken" type="password" autocomplete="off" maxlength="5000" required placeholder="Enter token on this page only"></div>
+      <div class="actions"><button class="primary" type="submit">Save encrypted connection</button></div>
+    </form>
+    <div id="waConfigStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
+    <form id="whatsappCompose">
+      <div class="field"><label for="waRecipient">Recipient phone (with country code)</label><input id="waRecipient" required maxlength="25" placeholder="Example: 919876543210"></div>
+      <div class="field"><label for="waMessage">Message</label><textarea id="waMessage" rows="3" required maxlength="4000" placeholder="Write your message..."></textarea></div>
+      <div class="actions"><button class="primary" type="submit">Review & send WhatsApp</button><button class="tab" id="disconnectWhatsapp" type="button">Disconnect WhatsApp</button></div>
+    </form>
+    <div id="waComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
+  </div>
 </div></section>
 <section id="custom" class="hidden">
 <div class="section-title"><h2>Custom MCP servers</h2><span class="count">Configuration list only</span></div>
@@ -100,84 +110,73 @@ function getOwnerToken(){let t=localStorage.getItem("omnix_connect_owner_token_v
 async function gmailRequest(path,options={}){const headers={Authorization:"Bearer "+getOwnerToken(),...(options.headers||{})};if(options.body)headers["Content-Type"]="application/json";const res=await fetch(CONNECT_API+path,{...options,headers,cache:"no-store"});const data=await res.json().catch(()=>({error:"Invalid server response"}));if(!res.ok)throw new Error(data.error||("HTTP "+res.status));return data}
 let gmailConnected=false;
 let metaStates={};
-function metaConnectedAny(){return Object.values(metaStates).some(s=>s&&s.connected)}
+let metaPages=[];
+function metaConnectedAny(){return Boolean(metaStates["whatsapp-business"]?.connected||metaStates["instagram-messaging"]?.connected||metaStates.messenger?.connected)}
 async function refreshMetaStatus(){
   try {
-    metaStates=await gmailRequest("/meta/status");
-    const any=metaConnectedAny();
-    $("metaWorkspace").classList.toggle("hidden",!any);
-    $("metaState").textContent=any?"CONNECTED":"NOT CONNECTED";
-    $("connectedEmpty").classList.toggle("hidden",gmailConnected||any);
+    const s=await gmailRequest("/social/status");
+    metaStates={"whatsapp-business":{connected:Boolean(s.whatsapp),assets:[]},"instagram-messaging":{connected:Boolean(s.instagram),assets:[]},"messenger":{connected:Boolean(s.messenger),assets:[]},metaConfigured:Boolean(s.metaConfigured)};
+    metaPages=[];
+    if(s.instagram||s.messenger){
+      const p=await gmailRequest("/meta/pages");metaPages=p.pages||[];
+      metaStates.messenger.assets=metaPages.map(x=>({id:x.id,name:x.name}));
+      metaStates["instagram-messaging"].assets=metaPages.filter(x=>x.instagram?.id).map(x=>({id:x.id,name:(x.instagram.username?"@"+x.instagram.username+" — ":"")+x.name}));
+    }
+    $("metaState").textContent=metaConnectedAny()?"CONNECTED":"SETUP REQUIRED";
+    $("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());
     updateMetaAssets();
   } catch(e) {
-    metaStates={};
-    $("metaWorkspace").classList.add("hidden");
-    $("metaState").textContent="SETUP REQUIRED";
-    $("connectedEmpty").classList.toggle("hidden",gmailConnected);
+    metaStates={};$("metaState").textContent="SETUP REQUIRED";
+    $("connectedEmpty").classList.toggle("hidden",gmailConnected);updateMetaAssets();
   }
 }
 function updateMetaAssets(){
-  const key=$("metaConnector").value, state=metaStates[key], select=$("metaAsset");
-  select.replaceChildren();
-  const assets=state?.assets||[];
-  if(!assets.length){const o=document.createElement("option");o.value="";o.textContent="No connected account for this app";select.append(o);return}
-  assets.forEach(a=>{const o=document.createElement("option");o.value=a.id;o.textContent=a.name+" ("+a.id+")";select.append(o)});
+  const platform=$("metaPlatform").value,select=$("metaAsset");select.replaceChildren();
+  const key=platform==="instagram"?"instagram-messaging":"messenger",assets=metaStates[key]?.assets||[];
+  if(!assets.length){const o=document.createElement("option");o.value="";o.textContent="No eligible Page/account connected";select.append(o);return}
+  assets.forEach(a=>{const o=document.createElement("option");o.value=a.id;o.textContent=a.name+" (Page ID "+a.id+")";select.append(o)});
 }
 async function refreshGmailStatus(){
-  try { const s=await gmailRequest("/gmail/status");gmailConnected=Boolean(s.connected);$("gmailWorkspace").classList.toggle("hidden",!gmailConnected);$("gmailState").textContent=gmailConnected?"CONNECTED":"DISCONNECTED"; }
-  catch(e) { gmailConnected=false;$("gmailWorkspace").classList.add("hidden");$("gmailState").textContent="UNAVAILABLE"; }
-  await refreshMetaStatus();
-  $("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());
-  renderCatalog();
+  try {const s=await gmailRequest("/gmail/status");gmailConnected=Boolean(s.connected);$("gmailWorkspace").classList.toggle("hidden",!gmailConnected);$("gmailState").textContent=gmailConnected?"CONNECTED":"DISCONNECTED";}
+  catch(e){gmailConnected=false;$("gmailWorkspace").classList.add("hidden");$("gmailState").textContent="UNAVAILABLE";}
+  await refreshMetaStatus();$("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());renderCatalog();
 }
 async function startMetaConnect(){
-  try { const res=await gmailRequest("/meta/connect",{method:"POST",body:JSON.stringify({ownerToken:getOwnerToken()})}); if(!res.authUrl)throw new Error("Meta did not return an authorization URL."); location.href=res.authUrl; }
+  try{const res=await gmailRequest("/meta/connect",{method:"POST",body:JSON.stringify({ownerToken:getOwnerToken()})});if(!res.authUrl)throw new Error("Meta did not return an authorization URL.");location.href=res.authUrl;}
   catch(e){alert(e.message)}
 }
 async function startGmailConnect(){try{const res=await fetch(CONNECT_API+"/gmail/connect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ownerToken:getOwnerToken()}),cache:"no-store"});const data=await res.json();if(!res.ok)throw new Error(data.error||"Unable to start Gmail connection");location.href=data.authUrl}catch(e){alert(e.message)}}
 function switchTab(id){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));["discover","connected","custom"].forEach(x=>$(x).classList.toggle("hidden",x!==id));}
-function renderCatalog(){$("catalog").replaceChildren();catalog.forEach(c=>{const card=document.createElement("article");card.className="card";const top=document.createElement("div");top.className="card-top";const icon=document.createElement("div");icon.className="icon";icon.textContent=c.icon;const title=document.createElement("div");const h=document.createElement("h3");h.textContent=c.name;const badge=document.createElement("span");badge.className="badge";const metaApp=["whatsapp-business","instagram-messaging","messenger"].includes(c.id);badge.textContent=c.id==="gmail"?(gmailConnected?"CONNECTED":"READY FOR SETUP"):metaApp?(metaStates[c.id]?.connected?"CONNECTED":"META SETUP"):c.status;title.append(h,badge);top.append(icon,title);const p=document.createElement("p");p.textContent=c.description;const caps=document.createElement("div");caps.className="caps";c.caps.forEach(x=>{const s=document.createElement("span");s.className="cap";s.textContent=x;caps.append(s)});const b=document.createElement("button");b.type="button";if(c.id==="gmail"){b.textContent=gmailConnected?"Open Gmail workspace":"Connect Gmail";b.addEventListener("click",()=>{if(gmailConnected){switchTab("connected");loadInbox()}else startGmailConnect()})}else if(metaApp){b.textContent=metaStates[c.id]?.connected?"Open messaging":c.id==="whatsapp-business"?"Set up WhatsApp":"Connect Meta apps";b.addEventListener("click",()=>{switchTab("connected");$("metaWorkspace").classList.remove("hidden");$("metaConnector").value=c.id;updateMetaAssets();if(c.id!=="whatsapp-business"&&!metaStates[c.id]?.connected)startMetaConnect()})}else{b.textContent="Not connected yet";b.disabled=true}card.append(top,p,caps,b);$("catalog").append(card)})}
+function renderCatalog(){$("catalog").replaceChildren();catalog.forEach(c=>{const card=document.createElement("article");card.className="card";const top=document.createElement("div");top.className="card-top";const icon=document.createElement("div");icon.className="icon";icon.textContent=c.icon;const title=document.createElement("div");const h=document.createElement("h3");h.textContent=c.name;const badge=document.createElement("span");badge.className="badge";const metaApp=["whatsapp-business","instagram-messaging","messenger"].includes(c.id);badge.textContent=c.id==="gmail"?(gmailConnected?"CONNECTED":"READY FOR SETUP"):metaApp?(metaStates[c.id]?.connected?"CONNECTED":"SETUP REQUIRED"):c.status;title.append(h,badge);top.append(icon,title);const p=document.createElement("p");p.textContent=c.description;const caps=document.createElement("div");caps.className="caps";c.caps.forEach(x=>{const s=document.createElement("span");s.className="cap";s.textContent=x;caps.append(s)});const b=document.createElement("button");b.type="button";if(c.id==="gmail"){b.textContent=gmailConnected?"Open Gmail workspace":"Connect Gmail";b.addEventListener("click",()=>{if(gmailConnected){switchTab("connected");loadInbox()}else startGmailConnect()})}else if(metaApp){b.textContent=metaStates[c.id]?.connected?"Open messaging":"Set up connector";b.addEventListener("click",()=>{switchTab("connected");if(c.id==="whatsapp-business"){$("waPhoneId").focus()}else{$("metaPlatform").value=c.id==="instagram-messaging"?"instagram":"messenger";updateMetaAssets();if(!metaStates[c.id]?.connected)startMetaConnect()}})}else{b.textContent="Not connected yet";b.disabled=true}card.append(top,p,caps,b);$("catalog").append(card)})}
 async function loadInbox(){const root=$("gmailInbox");root.replaceChildren();const loading=document.createElement("div");loading.className="empty";loading.textContent="Loading your latest inbox messages…";root.append(loading);try{const data=await gmailRequest("/gmail/messages");root.replaceChildren();if(!data.messages?.length){const e=document.createElement("div");e.className="empty";e.textContent="Your inbox list is empty.";root.append(e);return}data.messages.forEach(m=>{const card=document.createElement("article");card.className="card";card.style.marginBottom="9px";const h=document.createElement("h3");h.textContent=m.subject||"(No subject)";const from=document.createElement("p");from.textContent="From: "+(m.from||"Unknown sender")+" · "+(m.date||"");const snippet=document.createElement("p");snippet.textContent=m.snippet||"No preview";const b=document.createElement("button");b.type="button";b.textContent="Read message";b.addEventListener("click",()=>readMessage(m.id));card.append(h,from,snippet,b);root.append(card)})}catch(e){root.replaceChildren();const err=document.createElement("div");err.className="empty";err.textContent=e.message;root.append(err)}}
 async function readMessage(id){const root=$("gmailInbox");try{const data=await gmailRequest("/gmail/message?id="+encodeURIComponent(id));root.replaceChildren();const card=document.createElement("article");card.className="card";const h=document.createElement("h3");h.textContent=data.message.subject||"(No subject)";const from=document.createElement("p");from.textContent="From: "+data.message.from;const to=document.createElement("p");to.textContent="To: "+data.message.to;const body=document.createElement("pre");body.style.whiteSpace="pre-wrap";body.style.overflowWrap="anywhere";body.textContent=data.body||data.message.snippet||"(No plain-text body available)";const back=document.createElement("button");back.className="tab";back.textContent="← Back to inbox";back.addEventListener("click",loadInbox);card.append(h,from,to,body,back);root.append(card)}catch(e){alert(e.message)}}
 $("refreshInbox").addEventListener("click",loadInbox);
 $("connectMetaAgain").addEventListener("click",startMetaConnect);
-$("metaConnector").addEventListener("change",updateMetaAssets);
+$("metaPlatform").addEventListener("change",updateMetaAssets);
 $("metaCompose").addEventListener("submit",async e=>{
-  e.preventDefault();
-  const connector=$("metaConnector").value,assetId=$("metaAsset").value,recipient=$("metaRecipient").value.trim(),message=$("metaMessage").value.trim(),status=$("metaComposeStatus");
-  status.textContent="Preparing message for review…";
-  try {
-    if(connector==="whatsapp-business"){
-      const to=recipient.replace(/[\\s()+-]/g,"");
-      const prepared=await gmailRequest("/whatsapp/send/prepare",{method:"POST",body:JSON.stringify({to,message})});
-      const p=prepared.preview;
-      if(!confirm("SEND WHATSAPP MESSAGE?\n\nTo: "+p.to+"\n\nMessage:\n"+p.message+"\n\nOnly continue if these details are correct.")){status.textContent="Sending cancelled. Nothing was sent.";return}
-      status.textContent="Sending…";
-      const result=await gmailRequest("/whatsapp/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,message,confirmation:"SEND MESSAGE"})});
-      status.textContent="WhatsApp accepted the message. Message ID: "+(result.messageId||"not provided");
-    } else {
-      const platform=connector==="instagram-messaging"?"instagram":"messenger";
-      const prepared=await gmailRequest("/meta/send/prepare",{method:"POST",body:JSON.stringify({platform,pageId:assetId,recipientId:recipient,message})});
-      const p=prepared.preview;
-      if(!confirm("SEND "+platform.toUpperCase()+" MESSAGE?\n\nAccount ID: "+assetId+"\nRecipient ID: "+recipient+"\n\nMessage:\n"+p.message+"\n\nOnly continue if these details are correct.")){status.textContent="Sending cancelled. Nothing was sent.";return}
-      status.textContent="Sending…";
-      const result=await gmailRequest("/meta/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,platform,pageId:assetId,recipientId:recipient,message,confirmation:"SEND MESSAGE"})});
-      status.textContent="Meta accepted the message. Message ID: "+(result.messageId||"not provided");
-    }
-    e.target.reset();
-  } catch(err){status.textContent=err.message}
-});
-$("whatsappSetupForm").addEventListener("submit",async e=>{
-  e.preventDefault();const status=$("waSetupStatus");status.textContent="Saving encrypted credentials…";
-  try{
-    const result=await gmailRequest("/whatsapp/configure",{method:"POST",body:JSON.stringify({phoneNumberId:$("waPhoneNumberId").value.trim(),businessAccountId:$("waBusinessAccountId").value.trim(),accessToken:$("waAccessToken").value.trim()})});
-    status.textContent=result.message||"WhatsApp Business connected.";e.target.reset();await refreshMetaStatus();
+  e.preventDefault();const platform=$("metaPlatform").value,pageId=$("metaAsset").value,recipientId=$("metaRecipient").value.trim(),message=$("metaMessage").value,status=$("metaComposeStatus");status.textContent="Preparing message for review…";
+  try{const prepared=await gmailRequest("/meta/send/prepare",{method:"POST",body:JSON.stringify({platform,pageId,recipientId,message})}),p=prepared.preview;
+    const approved=confirm("SEND THIS MESSAGE?\n\nPlatform: "+p.platform+"\nPage ID: "+p.pageId+"\nRecipient ID: "+p.recipientId+"\n\nMessage:\n"+p.message+"\n\nChoose OK only if all details are correct.");
+    if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}
+    status.textContent="Sending…";const result=await gmailRequest("/meta/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,platform,pageId,recipientId,message,confirmation:"SEND MESSAGE"})});
+    status.textContent="Meta accepted the message. Message ID: "+(result.messageId||"not provided");
   }catch(err){status.textContent=err.message}
 });
-$("waDisconnect").addEventListener("click",async()=>{
-  if(!confirm("Disconnect WhatsApp Business from OMNIX?"))return;
-  try{await gmailRequest("/whatsapp/disconnect",{method:"POST",body:"{}"});$("waSetupStatus").textContent="WhatsApp disconnected.";await refreshMetaStatus()}catch(err){$("waSetupStatus").textContent=err.message}
+$("whatsappConfigForm").addEventListener("submit",async e=>{
+  e.preventDefault();const status=$("waConfigStatus");status.textContent="Saving encrypted WhatsApp credentials…";
+  try{const result=await gmailRequest("/whatsapp/configure",{method:"POST",body:JSON.stringify({phoneNumberId:$("waPhoneId").value.trim(),businessAccountId:$("waBusinessId").value.trim(),accessToken:$("waAccessToken").value.trim()})});status.textContent=result.message||"WhatsApp connection saved.";$("waAccessToken").value="";await refreshMetaStatus();}
+  catch(err){status.textContent=err.message}
 });
+$("whatsappCompose").addEventListener("submit",async e=>{
+  e.preventDefault();const to=$("waRecipient").value.trim(),message=$("waMessage").value,status=$("waComposeStatus");status.textContent="Preparing WhatsApp message for review…";
+  try{const prepared=await gmailRequest("/whatsapp/send/prepare",{method:"POST",body:JSON.stringify({to,message})}),p=prepared.preview;
+    const approved=confirm("SEND THIS WHATSAPP MESSAGE?\n\nTo: "+p.to+"\n\nMessage:\n"+p.message+"\n\nChoose OK only if all details are correct.");
+    if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}
+    status.textContent="Sending…";const result=await gmailRequest("/whatsapp/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,message,confirmation:"SEND MESSAGE"})});
+    status.textContent="WhatsApp accepted the message. Message ID: "+(result.messageId||"not provided");
+  }catch(err){status.textContent=err.message}
+});
+$("disconnectWhatsapp").addEventListener("click",async()=>{if(!confirm("Disconnect WhatsApp Business from OMNIX?"))return;try{await gmailRequest("/whatsapp/disconnect",{method:"POST",body:"{}"});await refreshMetaStatus();$("waConfigStatus").textContent="WhatsApp disconnected."}catch(e){$("waConfigStatus").textContent=e.message}});
 $("disconnectGmail").addEventListener("click",async()=>{if(!confirm("Disconnect Gmail from OMNIX on this browser?"))return;try{await gmailRequest("/gmail/disconnect",{method:"POST",body:"{}"});await refreshGmailStatus()}catch(e){alert(e.message)}});
 $("gmailCompose").addEventListener("submit",async e=>{e.preventDefault();const to=$("gmailTo").value.trim(),subject=$("gmailSubject").value.trim(),body=$("gmailBody").value;const status=$("gmailComposeStatus");status.textContent="Preparing email for review…";try{const prepared=await gmailRequest("/gmail/send/prepare",{method:"POST",body:JSON.stringify({to,subject,body})});const p=prepared.preview;const approved=confirm("SEND THIS EMAIL?\n\nTo: "+p.to+"\nSubject: "+p.subject+"\n\nMessage:\n"+p.body+"\n\nChoose OK only if the recipient and full message are correct.");if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}status.textContent="Sending…";const result=await gmailRequest("/gmail/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,subject,body,confirmation:"SEND EMAIL"})});status.textContent="Sent successfully. Gmail message ID: "+result.messageId;$("gmailCompose").reset()}catch(err){status.textContent=err.message}});
 
