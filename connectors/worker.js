@@ -91,9 +91,22 @@ async function route(request, env) {
   }
   if(url.pathname==="/health"&&request.method==="GET") return json({service:"OMNIX Connect Gmail",status:"online",gmailOAuthConfigured:Boolean(env.GOOGLE_CLIENT_ID&&env.GOOGLE_CLIENT_SECRET),encryptionConfigured:Boolean(env.OMNIX_ENCRYPTION_KEY)});
   if(url.pathname===CALLBACK_PATH&&request.method==="GET") return await oauthCallback(request,env);
+  if(url.pathname==="/oauth/meta/callback"&&request.method==="GET") return await metaOAuthCallback(request,env);
   if(origin!==ALLOWED_ORIGIN) return json({error:"Origin not allowed."},403);
   if(!env.OMNIX_DB) return json({error:"D1 binding OMNIX_DB is missing."},500);
-  if(url.pathname==="/oauth/meta/callback"&&request.method==="GET") return await metaOAuthCallback(request,env);
+  if(url.pathname==="/gmail/connect"&&request.method==="POST") {
+    if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET) return json({error:"Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the omnix-connect Worker after creating OAuth credentials."},503);
+    const b=await bodyJson(request), raw=b?.ownerToken;
+    if(!validOwner(raw)) return json({error:"Invalid local owner token."},400);
+    const owner=await sha(raw), state=b64(crypto.getRandomValues(new Uint8Array(32))), verifier=b64(crypto.getRandomValues(new Uint8Array(32))), challenge=await sha(verifier);
+    const expires=new Date(Date.now()+10*60*1000).toISOString();
+    await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_oauth_states (state_hash,owner_id,connector_key,code_verifier_encrypted,expires_at) VALUES (?,?,?,?,?)").bind(await sha(state),owner,"gmail",await seal(env,{verifier}),expires).run();
+    const auth=new URL(GOOGLE_AUTH);
+    for(const [k,v] of Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:redirectUri(request),response_type:"code",scope:"https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify",access_type:"offline",prompt:"consent",state,code_challenge:challenge,code_challenge_method:"S256"})) auth.searchParams.set(k,v);
+    return json({authUrl:auth.toString()});
+  }
+  const owner=await requireOwner(request,env);
+  if(!owner) return json({error:"Unauthorized. Open OMNIX Connect in your browser and try again."},401);
   if(url.pathname==="/social/status"&&request.method==="GET") {
     const [wa,meta]=await Promise.all([
       env.OMNIX_DB.prepare("SELECT status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first(),
@@ -184,19 +197,6 @@ async function route(request, env) {
       return json({sent:true,messageId:data.message_id||"",message:"Meta accepted the message."});
     } catch(e) { await audit(env,owner,"meta.send","error",c.id,"meta.send",{platform}); return json({error:String(e.message||e)},502); }
   }
-  if(url.pathname==="/gmail/connect"&&request.method==="POST") {
-    if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET) return json({error:"Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the omnix-connect Worker after creating OAuth credentials."},503);
-    const b=await bodyJson(request), raw=b?.ownerToken;
-    if(!validOwner(raw)) return json({error:"Invalid local owner token."},400);
-    const owner=await sha(raw), state=b64(crypto.getRandomValues(new Uint8Array(32))), verifier=b64(crypto.getRandomValues(new Uint8Array(32))), challenge=await sha(verifier);
-    const expires=new Date(Date.now()+10*60*1000).toISOString();
-    await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_oauth_states (state_hash,owner_id,connector_key,code_verifier_encrypted,expires_at) VALUES (?,?,?,?,?)").bind(await sha(state),owner,"gmail",await seal(env,{verifier}),expires).run();
-    const auth=new URL(GOOGLE_AUTH);
-    for(const [k,v] of Object.entries({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:redirectUri(request),response_type:"code",scope:"https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify",access_type:"offline",prompt:"consent",state,code_challenge:challenge,code_challenge_method:"S256"})) auth.searchParams.set(k,v);
-    return json({authUrl:auth.toString()});
-  }
-  const owner=await requireOwner(request,env);
-  if(!owner) return json({error:"Unauthorized. Open OMNIX Connect in your browser and try again."},401);
   if(url.pathname==="/gmail/status"&&request.method==="GET") {
     const cfg=await gmailConfig(env,owner);
     return json({connected:Boolean(cfg&&cfg.status==="connected"),status:cfg?.status||"disconnected"});
