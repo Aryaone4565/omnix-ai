@@ -23,7 +23,7 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
 <header><div class="logo">OMNIX <span style="color:#a1a1aa;font-size:11px;letter-spacing:1px">CONNECT</span></div><a class="back" href="https://arya4565.github.io/omnix-ai/">← Back to OMNIX</a></header>
 <main>
 <section class="hero"><div class="eyebrow">Extensible integration hub</div><h1>Your AI. Your tools.<br>One connector system.</h1><p>Explore planned integrations and keep a local list of remote MCP server configurations. The design is built to grow beyond today's apps.</p></section>
-<div class="notice"><strong>Gmail connector:</strong> The first backend is deployed. Gmail connection becomes available after Google OAuth credentials are configured. Other app integrations remain planned. Custom server entries are still local drafts.</div>
+<div class="notice"><strong>Connector setup:</strong> Gmail has its own connector. WhatsApp Business, Instagram and Facebook Messenger share a Meta authorization flow. Meta messaging requires a configured Meta developer app, eligible business assets and approved permissions. Custom server entries remain local drafts.</div>
 <div class="tabs" role="tablist"><button class="tab active" data-tab="discover">Discover</button><button class="tab" data-tab="connected">Connected</button><button class="tab" data-tab="custom">Custom connectors</button></div>
 <section id="discover">
 <div class="section-title"><h2>Popular integrations</h2><span class="count">6 planned connectors</span></div>
@@ -44,6 +44,19 @@ main{max-width:1000px;margin:auto;padding:26px 16px 60px}.hero{padding:24px 0 18
     </form>
     <div id="gmailComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
   </div>
+</div>
+<div id="metaWorkspace" class="panel hidden" style="margin-top:14px">
+  <div class="section-title"><h2>💬 Meta messaging</h2><span id="metaState" class="badge">CHECKING</span></div>
+  <p style="color:var(--muted);font-size:13px">Connect eligible WhatsApp Business, Instagram professional, and Facebook Page assets. You must have permission to message the recipient. Review every message before sending.</p>
+  <div class="actions"><button class="primary" id="connectMetaAgain" type="button">Connect / refresh Meta apps</button></div>
+  <form id="metaCompose">
+    <div class="field"><label for="metaConnector">App</label><select id="metaConnector" required><option value="whatsapp-business">WhatsApp Business</option><option value="instagram-messaging">Instagram</option><option value="messenger">Facebook Messenger</option></select></div>
+    <div class="field"><label for="metaAsset">Connected account</label><select id="metaAsset" required><option value="">Connect Meta first</option></select></div>
+    <div class="field"><label for="metaRecipient">Recipient ID or phone</label><input id="metaRecipient" required maxlength="200" placeholder="WhatsApp: country code + digits, no +; other apps: recipient-scoped ID"></div>
+    <div class="field"><label for="metaMessage">Message</label><textarea id="metaMessage" rows="4" required maxlength="4000" placeholder="Write your message..."></textarea></div>
+    <div class="actions"><button class="primary" type="submit">Review & send message</button></div>
+  </form>
+  <div id="metaComposeStatus" style="font-size:13px;color:var(--muted);margin-top:10px" role="status"></div>
 </div></section>
 <section id="custom" class="hidden">
 <div class="section-title"><h2>Custom MCP servers</h2><span class="count">Configuration list only</span></div>
@@ -75,20 +88,70 @@ const CONNECT_API="https://omnix-connect.aryaone4565.workers.dev";
 function getOwnerToken(){let t=localStorage.getItem("omnix_connect_owner_token_v1");if(!t){const bytes=crypto.getRandomValues(new Uint8Array(32));t=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");localStorage.setItem("omnix_connect_owner_token_v1",t)}return t}
 async function gmailRequest(path,options={}){const headers={Authorization:"Bearer "+getOwnerToken(),...(options.headers||{})};if(options.body)headers["Content-Type"]="application/json";const res=await fetch(CONNECT_API+path,{...options,headers,cache:"no-store"});const data=await res.json().catch(()=>({error:"Invalid server response"}));if(!res.ok)throw new Error(data.error||("HTTP "+res.status));return data}
 let gmailConnected=false;
-async function refreshGmailStatus(){try{const s=await gmailRequest("/gmail/status");gmailConnected=Boolean(s.connected);$("gmailWorkspace").classList.toggle("hidden",!gmailConnected);$("connectedEmpty").classList.toggle("hidden",gmailConnected);$("gmailState").textContent=gmailConnected?"CONNECTED":"DISCONNECTED";}catch(e){gmailConnected=false;$("gmailWorkspace").classList.add("hidden");$("gmailState").textContent="UNAVAILABLE"}renderCatalog()}
+let metaStates={};
+function metaConnectedAny(){return Object.values(metaStates).some(s=>s&&s.connected)}
+async function refreshMetaStatus(){
+  try {
+    metaStates=await gmailRequest("/meta/status");
+    const any=metaConnectedAny();
+    $("metaWorkspace").classList.toggle("hidden",!any);
+    $("metaState").textContent=any?"CONNECTED":"NOT CONNECTED";
+    $("connectedEmpty").classList.toggle("hidden",gmailConnected||any);
+    updateMetaAssets();
+  } catch(e) {
+    metaStates={};
+    $("metaWorkspace").classList.add("hidden");
+    $("metaState").textContent="SETUP REQUIRED";
+    $("connectedEmpty").classList.toggle("hidden",gmailConnected);
+  }
+}
+function updateMetaAssets(){
+  const key=$("metaConnector").value, state=metaStates[key], select=$("metaAsset");
+  select.replaceChildren();
+  const assets=state?.assets||[];
+  if(!assets.length){const o=document.createElement("option");o.value="";o.textContent="No connected account for this app";select.append(o);return}
+  assets.forEach(a=>{const o=document.createElement("option");o.value=a.id;o.textContent=a.name+" ("+a.id+")";select.append(o)});
+}
+async function refreshGmailStatus(){
+  try { const s=await gmailRequest("/gmail/status");gmailConnected=Boolean(s.connected);$("gmailWorkspace").classList.toggle("hidden",!gmailConnected);$("gmailState").textContent=gmailConnected?"CONNECTED":"DISCONNECTED"; }
+  catch(e) { gmailConnected=false;$("gmailWorkspace").classList.add("hidden");$("gmailState").textContent="UNAVAILABLE"; }
+  await refreshMetaStatus();
+  $("connectedEmpty").classList.toggle("hidden",gmailConnected||metaConnectedAny());
+  renderCatalog();
+}
+async function startMetaConnect(){
+  try { const res=await gmailRequest("/meta/connect",{method:"POST",body:JSON.stringify({ownerToken:getOwnerToken()})}); if(!res.authUrl)throw new Error("Meta did not return an authorization URL."); location.href=res.authUrl; }
+  catch(e){alert(e.message)}
+}
 async function startGmailConnect(){try{const res=await fetch(CONNECT_API+"/gmail/connect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ownerToken:getOwnerToken()}),cache:"no-store"});const data=await res.json();if(!res.ok)throw new Error(data.error||"Unable to start Gmail connection");location.href=data.authUrl}catch(e){alert(e.message)}}
 function switchTab(id){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b.dataset.tab===id));["discover","connected","custom"].forEach(x=>$(x).classList.toggle("hidden",x!==id));}
-function renderCatalog(){$("catalog").replaceChildren();catalog.forEach(c=>{const card=document.createElement("article");card.className="card";const top=document.createElement("div");top.className="card-top";const icon=document.createElement("div");icon.className="icon";icon.textContent=c.icon;const title=document.createElement("div");const h=document.createElement("h3");h.textContent=c.name;const badge=document.createElement("span");badge.className="badge";badge.textContent=c.id==="gmail"?(gmailConnected?"CONNECTED":"READY FOR SETUP"):c.status;title.append(h,badge);top.append(icon,title);const p=document.createElement("p");p.textContent=c.description;const caps=document.createElement("div");caps.className="caps";c.caps.forEach(x=>{const s=document.createElement("span");s.className="cap";s.textContent=x;caps.append(s)});const b=document.createElement("button");b.type="button";if(c.id==="gmail"){b.textContent=gmailConnected?"Open Gmail workspace":"Connect Gmail";b.addEventListener("click",()=>{if(gmailConnected){switchTab("connected");loadInbox()}else startGmailConnect()})}else{b.textContent="Not connected yet";b.disabled=true}card.append(top,p,caps,b);$("catalog").append(card)})}
+function renderCatalog(){$("catalog").replaceChildren();catalog.forEach(c=>{const card=document.createElement("article");card.className="card";const top=document.createElement("div");top.className="card-top";const icon=document.createElement("div");icon.className="icon";icon.textContent=c.icon;const title=document.createElement("div");const h=document.createElement("h3");h.textContent=c.name;const badge=document.createElement("span");badge.className="badge";const metaApp=["whatsapp-business","instagram-messaging","messenger"].includes(c.id);badge.textContent=c.id==="gmail"?(gmailConnected?"CONNECTED":"READY FOR SETUP"):metaApp?(metaStates[c.id]?.connected?"CONNECTED":"META SETUP"):c.status;title.append(h,badge);top.append(icon,title);const p=document.createElement("p");p.textContent=c.description;const caps=document.createElement("div");caps.className="caps";c.caps.forEach(x=>{const s=document.createElement("span");s.className="cap";s.textContent=x;caps.append(s)});const b=document.createElement("button");b.type="button";if(c.id==="gmail"){b.textContent=gmailConnected?"Open Gmail workspace":"Connect Gmail";b.addEventListener("click",()=>{if(gmailConnected){switchTab("connected");loadInbox()}else startGmailConnect()})}else if(metaApp){b.textContent=metaStates[c.id]?.connected?"Open messaging":"Connect Meta apps";b.addEventListener("click",()=>{if(metaStates[c.id]?.connected){switchTab("connected");$("metaWorkspace").classList.remove("hidden");$("metaConnector").value=c.id;updateMetaAssets()}else startMetaConnect()})}else{b.textContent="Not connected yet";b.disabled=true}card.append(top,p,caps,b);$("catalog").append(card)})}
 async function loadInbox(){const root=$("gmailInbox");root.replaceChildren();const loading=document.createElement("div");loading.className="empty";loading.textContent="Loading your latest inbox messages…";root.append(loading);try{const data=await gmailRequest("/gmail/messages");root.replaceChildren();if(!data.messages?.length){const e=document.createElement("div");e.className="empty";e.textContent="Your inbox list is empty.";root.append(e);return}data.messages.forEach(m=>{const card=document.createElement("article");card.className="card";card.style.marginBottom="9px";const h=document.createElement("h3");h.textContent=m.subject||"(No subject)";const from=document.createElement("p");from.textContent="From: "+(m.from||"Unknown sender")+" · "+(m.date||"");const snippet=document.createElement("p");snippet.textContent=m.snippet||"No preview";const b=document.createElement("button");b.type="button";b.textContent="Read message";b.addEventListener("click",()=>readMessage(m.id));card.append(h,from,snippet,b);root.append(card)})}catch(e){root.replaceChildren();const err=document.createElement("div");err.className="empty";err.textContent=e.message;root.append(err)}}
 async function readMessage(id){const root=$("gmailInbox");try{const data=await gmailRequest("/gmail/message?id="+encodeURIComponent(id));root.replaceChildren();const card=document.createElement("article");card.className="card";const h=document.createElement("h3");h.textContent=data.message.subject||"(No subject)";const from=document.createElement("p");from.textContent="From: "+data.message.from;const to=document.createElement("p");to.textContent="To: "+data.message.to;const body=document.createElement("pre");body.style.whiteSpace="pre-wrap";body.style.overflowWrap="anywhere";body.textContent=data.body||data.message.snippet||"(No plain-text body available)";const back=document.createElement("button");back.className="tab";back.textContent="← Back to inbox";back.addEventListener("click",loadInbox);card.append(h,from,to,body,back);root.append(card)}catch(e){alert(e.message)}}
 $("refreshInbox").addEventListener("click",loadInbox);
+$("connectMetaAgain").addEventListener("click",startMetaConnect);
+$("metaConnector").addEventListener("change",updateMetaAssets);
+$("metaCompose").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const connector=$("metaConnector").value,assetId=$("metaAsset").value,recipient=$("metaRecipient").value.trim(),message=$("metaMessage").value,status=$("metaComposeStatus");
+  status.textContent="Preparing message for review…";
+  try {
+    const prepared=await gmailRequest("/meta/send/prepare",{method:"POST",body:JSON.stringify({connector,assetId,recipient,message})});
+    const p=prepared.preview;
+    const approved=confirm("SEND THIS MESSAGE?\n\nApp: "+p.connector+"\nAccount: "+p.account+"\nRecipient: "+p.recipient+"\n\nMessage:\n"+p.message+"\n\nChoose OK only if all details are correct.");
+    if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}
+    status.textContent="Sending…";
+    const result=await gmailRequest("/meta/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,connector,assetId,recipient,message,confirmation:"SEND MESSAGE"})});
+    status.textContent="Meta accepted the message. Message ID: "+(result.messageId||"not provided");
+  } catch(err){status.textContent=err.message}
+});
 $("disconnectGmail").addEventListener("click",async()=>{if(!confirm("Disconnect Gmail from OMNIX on this browser?"))return;try{await gmailRequest("/gmail/disconnect",{method:"POST",body:"{}"});await refreshGmailStatus()}catch(e){alert(e.message)}});
 $("gmailCompose").addEventListener("submit",async e=>{e.preventDefault();const to=$("gmailTo").value.trim(),subject=$("gmailSubject").value.trim(),body=$("gmailBody").value;const status=$("gmailComposeStatus");status.textContent="Preparing email for review…";try{const prepared=await gmailRequest("/gmail/send/prepare",{method:"POST",body:JSON.stringify({to,subject,body})});const p=prepared.preview;const approved=confirm("SEND THIS EMAIL?\n\nTo: "+p.to+"\nSubject: "+p.subject+"\n\nMessage:\n"+p.body+"\n\nChoose OK only if the recipient and full message are correct.");if(!approved){status.textContent="Sending cancelled. Nothing was sent.";return}status.textContent="Sending…";const result=await gmailRequest("/gmail/send",{method:"POST",body:JSON.stringify({approvalId:prepared.approvalId,to,subject,body,confirmation:"SEND EMAIL"})});status.textContent="Sent successfully. Gmail message ID: "+result.messageId;$("gmailCompose").reset()}catch(err){status.textContent=err.message}});
 
 function renderCustom(){const root=$("customList");root.replaceChildren();const items=getCustom();if(!items.length){const e=document.createElement("div");e.className="empty";e.textContent="No custom connector configurations saved in this browser.";root.append(e);return}items.forEach(item=>{const card=document.createElement("article");card.className="card custom-item";const info=document.createElement("div");const h=document.createElement("h3");h.textContent=item.name;const p=document.createElement("p");p.textContent=item.url;const note=document.createElement("p");note.textContent=item.notes||"No notes";const badge=document.createElement("span");badge.className="badge";badge.textContent="SAVED LOCALLY · NOT CONNECTED";info.append(h,badge,p,note);const remove=document.createElement("button");remove.className="danger";remove.textContent="Remove";remove.addEventListener("click",()=>{if(confirm("Remove this saved configuration from this browser?")){saveCustom(getCustom().filter(x=>x.id!==item.id));renderCustom()}});card.append(info,remove);root.append(card)})}
 document.querySelectorAll("[data-tab]").forEach(btn=>btn.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active",b===btn));["discover","connected","custom"].forEach(id=>$(id).classList.toggle("hidden",id!==btn.dataset.tab));if(btn.dataset.tab==="custom")renderCustom()}));
 $("customForm").addEventListener("submit",e=>{e.preventDefault();const name=$("serverName").value.trim(),raw=$("serverUrl").value.trim(),notes=$("serverNotes").value.trim(),url=safeUrl(raw);if(!url){alert("Enter a valid HTTPS hostname without embedded credentials or a URL fragment.");return}if(/localhost|127\.|\.local$|\.internal$|^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./i.test(url.hostname)){alert("Local and private-network endpoints are not accepted in this preview.");return}const items=getCustom();if(items.some(x=>x.url===url.href)){alert("That endpoint is already saved.");return}items.push({id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name,url:url.href,notes,createdAt:new Date().toISOString()});saveCustom(items);$("customForm").reset();renderCustom();alert("Configuration saved in this browser only. The server has not been contacted.")});
-renderCatalog();renderCustom();refreshGmailStatus();if(new URLSearchParams(location.search).get("gmail")==="connected"){history.replaceState({}, "", location.pathname);switchTab("connected");setTimeout(loadInbox,500)}
+renderCatalog();renderCustom();refreshGmailStatus();if(new URLSearchParams(location.search).get("gmail")==="connected"){history.replaceState({}, "", location.pathname);switchTab("connected");setTimeout(loadInbox,500)} if(new URLSearchParams(location.search).get("meta")==="connected"){history.replaceState({}, "", location.pathname);switchTab("connected");setTimeout(refreshMetaStatus,250)}
 </script>
 </body>
 </html>
