@@ -150,7 +150,7 @@ export default {
         const name = String(body.params?.name || "");
         const args = body.params?.arguments || {};
         try {
-          return rpcResult(id, { content: (await callTool(name, args, env)).content, ...(await structuredToolResult(name, args, env)) });
+          return rpcResult(id, await callTool(name, args, env));
         } catch (error) {
           return rpcResult(id, { isError: true, content: [{ type: "text", text: String(error?.message || "Tool failed").slice(0, 500) }] });
         }
@@ -162,8 +162,3 @@ export default {
   }
 };
 
-// Preserve MCP structuredContent when a tool provides it.
-async function structuredToolResult(name, args, env) {
-  const result = await callTool(name, args, env);
-  return result.structuredContent ? { structuredContent: result.structuredContent } : {};
-}
