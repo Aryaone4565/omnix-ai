@@ -254,7 +254,7 @@ async function handleGmailCommand(command, pending) {
 
 async function handleGmailReadCommand(command, pending) {
   const text = String(command || "").trim();
-  const wantsInbox = /\\b(?:see|show|check|read|summari[sz]e|shortlist|prioriti[sz]e|review|scan)\\b[\\s\\S]{0,100}\\b(?:my|the|inbox|email|emails|mail|messages)\\b|\\b(?:my|the)\\s+(?:inbox|emails?|mail|messages)\\b[\\s\\S]{0,100}\\b(?:shortlist|summari[sz]e|prioriti[sz]e|review|scan|important|unread)\\b/i.test(text);
+  const wantsInbox = /\b(?:see|show|check|read|summari[sz]e|shortlist|prioriti[sz]e|review|scan)\b[\s\S]{0,100}\b(?:my|the|inbox|email|emails|mail|messages)\b|\b(?:my|the)\s+(?:inbox|emails?|mail|messages)\b[\s\S]{0,100}\b(?:shortlist|summari[sz]e|prioriti[sz]e|review|scan|important|unread)\b/i.test(text);
   if (!wantsInbox) return false;
 
   try {
@@ -290,7 +290,7 @@ async function handleGmailReadCommand(command, pending) {
       "This is a read-only summary. Do not claim to have opened full email bodies; only metadata and snippets were retrieved.",
       "Email data (JSON):",
       JSON.stringify(safeEmails)
-    ].join("\\n");
+    ].join("\n");
 
     const contextMessages = conversation.slice(-20, -1);
     contextMessages.push({ role: "user", content: prompt });
@@ -304,10 +304,10 @@ async function handleGmailReadCommand(command, pending) {
     if (!response.ok || typeof data.reply !== "string" || !data.reply.trim()) {
       throw new Error(data.error || "The AI could not create the shortlist.");
     }
-    pending.textContent = "📬 Inbox shortlist (latest " + safeEmails.length + " messages)\\n\\n" + data.reply;
+    pending.textContent = "📬 Inbox shortlist (latest " + safeEmails.length + " messages)\n\n" + data.reply;
     return true;
   } catch (error) {
-    pending.textContent = "I couldn't shortlist your inbox: " + (error.message || "Unknown error") + "\\nNo emails were sent or changed. Open Connectors → Gmail and check the connection, then try again.";
+    pending.textContent = "I couldn't shortlist your inbox: " + (error.message || "Unknown error") + "\nNo emails were sent or changed. Open Connectors → Gmail and check the connection, then try again.";
     return true;
   }
 }
