@@ -93,6 +93,97 @@ async function route(request, env) {
   if(url.pathname===CALLBACK_PATH&&request.method==="GET") return await oauthCallback(request,env);
   if(origin!==ALLOWED_ORIGIN) return json({error:"Origin not allowed."},403);
   if(!env.OMNIX_DB) return json({error:"D1 binding OMNIX_DB is missing."},500);
+  if(url.pathname==="/oauth/meta/callback"&&request.method==="GET") return await metaOAuthCallback(request,env);
+  if(url.pathname==="/social/status"&&request.method==="GET") {
+    const [wa,meta]=await Promise.all([
+      env.OMNIX_DB.prepare("SELECT status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first(),
+      env.OMNIX_DB.prepare("SELECT status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(owner).first()
+    ]);
+    return json({whatsapp:wa?.status==="connected",instagram:meta?.status==="connected",messenger:meta?.status==="connected",metaConfigured:Boolean(env.META_APP_ID&&env.META_APP_SECRET)});
+  }
+  if(url.pathname==="/whatsapp/configure"&&request.method==="POST") {
+    const b=await bodyJson(request),phoneNumberId=String(b?.phoneNumberId||"").trim(),wabaId=String(b?.businessAccountId||"").trim(),accessToken=String(b?.accessToken||"").trim();
+    if(!/^\\d{5,30}$/.test(phoneNumberId)||!/^\\d{5,30}$/.test(wabaId)||accessToken.length<30||accessToken.length>5000) return json({error:"Provide a valid WhatsApp Phone Number ID, WhatsApp Business Account ID, and access token."},400);
+    const existing=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first();
+    const id=existing?.id||crypto.randomUUID(),encrypted=await seal(env,{phoneNumberId,businessAccountId:wabaId,accessToken});
+    if(existing) await env.OMNIX_DB.prepare("UPDATE omnix_connector_configs SET encrypted_credentials=?,status='connected',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(encrypted,id).run();
+    else await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_configs (id,owner_id,connector_key,display_name,connector_type,endpoint_url,encrypted_credentials,requested_permissions,enabled_tools,status) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,owner,"whatsapp","WhatsApp Business","native",null,encrypted,JSON.stringify(["whatsapp_business_messaging"]),JSON.stringify(["whatsapp.send_message"]),"connected").run();
+    await audit(env,owner,"whatsapp.configure","success",id,"whatsapp.configure",{});
+    return json({connected:true,message:"WhatsApp Business credentials encrypted and saved on the server."});
+  }
+  if(url.pathname==="/whatsapp/disconnect"&&request.method==="POST") {
+    const c=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first();
+    if(c) { await env.OMNIX_DB.prepare("UPDATE omnix_connector_configs SET encrypted_credentials=NULL,status='revoked',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(c.id).run(); await audit(env,owner,"whatsapp.disconnect","success",c.id,"whatsapp.disconnect",{}); }
+    return json({disconnected:true});
+  }
+  if(url.pathname==="/whatsapp/send/prepare"&&request.method==="POST") {
+    const c=await env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first();
+    if(!c||c.status!=="connected"||!c.encrypted_credentials) return json({error:"Connect WhatsApp Business first."},409);
+    const b=await bodyJson(request),to=String(b?.to||"").replace(/[\\s()+-]/g,""),message=String(b?.message||"").trim();
+    if(!/^\\d{8,15}$/.test(to)||!message||message.length>4000) return json({error:"Provide a recipient phone number with country code and a message under 4,000 characters."},400);
+    const args={to,message},hash=await sha(JSON.stringify(args)),approvalId=crypto.randomUUID(),expires=new Date(Date.now()+3*60*1000).toISOString();
+    await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_approvals (id,owner_id,connector_id,tool_name,arguments_hash,arguments_preview,expires_at) VALUES (?,?,?,?,?,?,?)").bind(approvalId,owner,c.id,"whatsapp.send",hash,JSON.stringify({to,message}),expires).run();
+    return json({approvalId,expiresAt:expires,preview:{to,message}});
+  }
+  if(url.pathname==="/whatsapp/send"&&request.method==="POST") {
+    const b=await bodyJson(request),to=String(b?.to||"").replace(/[\\s()+-]/g,""),message=String(b?.message||"").trim();
+    if(!b?.approvalId||b.confirmation!=="SEND MESSAGE") return json({error:"Explicit confirmation is required."},400);
+    const c=await env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='whatsapp' LIMIT 1").bind(owner).first();
+    if(!c||c.status!=="connected"||!c.encrypted_credentials) return json({error:"Connect WhatsApp Business first."},409);
+    const hash=await sha(JSON.stringify({to,message}));
+    const approval=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_approvals WHERE id=? AND owner_id=? AND connector_id=? AND tool_name='whatsapp.send' AND arguments_hash=? AND used_at IS NULL AND expires_at>?").bind(b.approvalId,owner,c.id,hash,new Date().toISOString()).first();
+    if(!approval) return json({error:"Approval expired or doesn't match this exact message."},409);
+    const used=await env.OMNIX_DB.prepare("UPDATE omnix_connector_approvals SET used_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND used_at IS NULL").bind(b.approvalId).run();
+    if(!used.meta?.changes) return json({error:"This approval has already been used."},409);
+    try {
+      const creds=await openSeal(env,c.encrypted_credentials);
+      const response=await fetch("https://graph.facebook.com/v22.0/"+encodeURIComponent(creds.phoneNumberId)+"/messages",{method:"POST",headers:{"Authorization":"Bearer "+creds.accessToken,"Content-Type":"application/json"},body:JSON.stringify({messaging_product:"whatsapp",recipient_type:"individual",to,type:"text",text:{preview_url:false,body:message}})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error("WhatsApp API HTTP "+response.status+": "+String(data.error?.message||"request failed").slice(0,160));
+      await audit(env,owner,"whatsapp.send","success",c.id,"whatsapp.send",{to});
+      return json({sent:true,messageId:data.messages?.[0]?.id||"",message:"WhatsApp accepted the message."});
+    } catch(e) { await audit(env,owner,"whatsapp.send","error",c.id,"whatsapp.send",{to}); return json({error:String(e.message||e)},502); }
+  }
+  if(url.pathname==="/meta/connect"&&request.method==="POST") {
+    if(!env.META_APP_ID||!env.META_APP_SECRET) return json({error:"Meta OAuth is not configured. Add META_APP_ID and META_APP_SECRET to the omnix-connect Worker after creating a Meta developer app."},503);
+    const b=await bodyJson(request),raw=b?.ownerToken;
+    if(!validOwner(raw)) return json({error:"Invalid local owner token."},400);
+    const state=b64(crypto.getRandomValues(new Uint8Array(32))),ownerHash=await sha(raw),expires=new Date(Date.now()+10*60*1000).toISOString();
+    await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_oauth_states (state_hash,owner_id,connector_key,code_verifier_encrypted,expires_at) VALUES (?,?,?,?,?)").bind(await sha(state),ownerHash,"meta",await seal(env,{verifier:""}),expires).run();
+    const auth=new URL("https://www.facebook.com/v22.0/dialog/oauth");
+    for(const [k,v] of Object.entries({client_id:env.META_APP_ID,redirect_uri:new URL("/oauth/meta/callback",new URL(request.url).origin).toString(),response_type:"code",scope:"pages_show_list,pages_messaging,pages_read_engagement,instagram_basic,instagram_manage_messages",state})) auth.searchParams.set(k,v);
+    return json({authUrl:auth.toString()});
+  }
+  if(url.pathname==="/meta/send/prepare"&&request.method==="POST") {
+    const c=await env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(owner).first();
+    if(!c||c.status!=="connected"||!c.encrypted_credentials) return json({error:"Connect Instagram/Messenger first."},409);
+    const b=await bodyJson(request),platform=String(b?.platform||""),pageId=String(b?.pageId||""),recipientId=String(b?.recipientId||""),message=String(b?.message||"").trim();
+    if(!["instagram","messenger"].includes(platform)||!/^\\d{3,30}$/.test(pageId)||!/^\\d{3,40}$/.test(recipientId)||!message||message.length>2000) return json({error:"Provide platform, Page ID, recipient ID, and message."},400);
+    const args={platform,pageId,recipientId,message},hash=await sha(JSON.stringify(args)),approvalId=crypto.randomUUID(),expires=new Date(Date.now()+3*60*1000).toISOString();
+    await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_approvals (id,owner_id,connector_id,tool_name,arguments_hash,arguments_preview,expires_at) VALUES (?,?,?,?,?,?,?)").bind(approvalId,owner,c.id,"meta.send",hash,JSON.stringify({platform,pageId,recipientId,message}),expires).run();
+    return json({approvalId,expiresAt:expires,preview:{platform,pageId,recipientId,message}});
+  }
+  if(url.pathname==="/meta/send"&&request.method==="POST") {
+    const b=await bodyJson(request),platform=String(b?.platform||""),pageId=String(b?.pageId||""),recipientId=String(b?.recipientId||""),message=String(b?.message||"").trim();
+    if(!b?.approvalId||b.confirmation!=="SEND MESSAGE") return json({error:"Explicit confirmation is required."},400);
+    const c=await env.OMNIX_DB.prepare("SELECT id,encrypted_credentials,status FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(owner).first();
+    if(!c||c.status!=="connected"||!c.encrypted_credentials) return json({error:"Connect Instagram/Messenger first."},409);
+    const hash=await sha(JSON.stringify({platform,pageId,recipientId,message}));
+    const approval=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_approvals WHERE id=? AND owner_id=? AND connector_id=? AND tool_name='meta.send' AND arguments_hash=? AND used_at IS NULL AND expires_at>?").bind(b.approvalId,owner,c.id,hash,new Date().toISOString()).first();
+    if(!approval) return json({error:"Approval expired or doesn't match this exact message."},409);
+    const used=await env.OMNIX_DB.prepare("UPDATE omnix_connector_approvals SET used_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND used_at IS NULL").bind(b.approvalId).run();
+    if(!used.meta?.changes) return json({error:"This approval has already been used."},409);
+    try {
+      const creds=await openSeal(env,c.encrypted_credentials),page=(creds.pages||[]).find(p=>p.id===pageId);
+      if(!page?.access_token) throw new Error("That Page is not connected to this Meta account.");
+      const payload={recipient:{id:recipientId},message:{text:message}};
+      const response=await fetch("https://graph.facebook.com/v22.0/"+encodeURIComponent(pageId)+"/messages?access_token="+encodeURIComponent(page.access_token),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error("Meta API HTTP "+response.status+": "+String(data.error?.message||"request failed").slice(0,160));
+      await audit(env,owner,"meta.send","success",c.id,"meta.send",{platform,to:recipientId});
+      return json({sent:true,messageId:data.message_id||"",message:"Meta accepted the message."});
+    } catch(e) { await audit(env,owner,"meta.send","error",c.id,"meta.send",{platform}); return json({error:String(e.message||e)},502); }
+  }
   if(url.pathname==="/gmail/connect"&&request.method==="POST") {
     if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET) return json({error:"Google OAuth is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the omnix-connect Worker after creating OAuth credentials."},503);
     const b=await bodyJson(request), raw=b?.ownerToken;
@@ -193,6 +284,36 @@ async function route(request, env) {
     return json({disconnected:true});
   }
   return json({error:"Not found."},404);
+}
+async function metaOAuthCallback(request,env) {
+  const url=new URL(request.url),state=url.searchParams.get("state")||"",code=url.searchParams.get("code")||"",error=url.searchParams.get("error");
+  if(error) return htmlPage("Meta connection cancelled","Meta did not authorize the requested permissions. Return to OMNIX Connect and try again.");
+  if(!state||!code||!env.OMNIX_DB||!env.META_APP_ID||!env.META_APP_SECRET||!env.OMNIX_ENCRYPTION_KEY) return htmlPage("Meta connection unavailable","Meta OAuth settings are incomplete. Check the OMNIX Connect Worker configuration.");
+  try {
+    const row=await env.OMNIX_DB.prepare("SELECT state_hash,owner_id,expires_at,consumed_at FROM omnix_connector_oauth_states WHERE state_hash=? AND connector_key='meta'").bind(await sha(state)).first();
+    if(!row||row.consumed_at||row.expires_at<new Date().toISOString()) return htmlPage("Connection expired","The Meta connection request expired or was already used. Start again from OMNIX Connect.");
+    await env.OMNIX_DB.prepare("UPDATE omnix_connector_oauth_states SET consumed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE state_hash=? AND consumed_at IS NULL").bind(row.state_hash).run();
+    const redirectUri=new URL("/oauth/meta/callback",new URL(request.url).origin).toString();
+    const tokenUrl=new URL("https://graph.facebook.com/v22.0/oauth/access_token");
+    for(const [k,v] of Object.entries({client_id:env.META_APP_ID,client_secret:env.META_APP_SECRET,redirect_uri:redirectUri,code})) tokenUrl.searchParams.set(k,v);
+    const tokenResponse=await fetch(tokenUrl),tokenData=await tokenResponse.json();
+    if(!tokenResponse.ok||!tokenData.access_token) throw new Error("Meta token exchange failed.");
+    const longUrl=new URL("https://graph.facebook.com/v22.0/oauth/access_token");
+    for(const [k,v] of Object.entries({grant_type:"fb_exchange_token",client_id:env.META_APP_ID,client_secret:env.META_APP_SECRET,fb_exchange_token:tokenData.access_token})) longUrl.searchParams.set(k,v);
+    const longResponse=await fetch(longUrl),longData=await longResponse.json();
+    const userToken=longResponse.ok&&longData.access_token?longData.access_token:tokenData.access_token;
+    const pagesResponse=await fetch("https://graph.facebook.com/v22.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token="+encodeURIComponent(userToken));
+    const pagesData=await pagesResponse.json();
+    if(!pagesResponse.ok) throw new Error("Unable to list Pages: "+String(pagesData.error?.message||"check Meta permissions").slice(0,180));
+    const pages=(pagesData.data||[]).map(p=>({id:String(p.id),name:String(p.name||"Facebook Page"),access_token:String(p.access_token||""),instagram_business_account:p.instagram_business_account||null})).filter(p=>p.id&&p.access_token);
+    if(!pages.length) throw new Error("No Facebook Pages with usable permissions were found. Add your Page to this Meta app and reconnect.");
+    const prior=await env.OMNIX_DB.prepare("SELECT id FROM omnix_connector_configs WHERE owner_id=? AND connector_key='meta' LIMIT 1").bind(row.owner_id).first();
+    const id=prior?.id||crypto.randomUUID(),creds={user_access_token:userToken,pages,connected_at:new Date().toISOString()};
+    if(prior) await env.OMNIX_DB.prepare("UPDATE omnix_connector_configs SET encrypted_credentials=?,status='connected',updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?").bind(await seal(env,creds),id).run();
+    else await env.OMNIX_DB.prepare("INSERT INTO omnix_connector_configs (id,owner_id,connector_key,display_name,connector_type,endpoint_url,encrypted_credentials,requested_permissions,enabled_tools,status) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(id,row.owner_id,"meta","Instagram & Messenger","native",null,await seal(env,creds),JSON.stringify(["pages_show_list","pages_messaging","instagram_basic","instagram_manage_messages"]),JSON.stringify(["meta.send"]), "connected").run();
+    await audit(env,row.owner_id,"meta.connect","success",id,"meta.oauth",{pages:pages.length});
+    return Response.redirect("https://aryaone4565.github.io/omnix-ai/connectors.html?meta=connected",303);
+  } catch(e) { console.error("Meta OAuth callback:",String(e.message||e)); return htmlPage("Meta connection failed",String(e.message||"Unknown error").slice(0,300)); }
 }
 async function oauthCallback(request,env) {
   const url=new URL(request.url),state=url.searchParams.get("state")||"",code=url.searchParams.get("code")||"",error=url.searchParams.get("error");
