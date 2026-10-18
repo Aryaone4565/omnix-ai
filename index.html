@@ -148,6 +148,97 @@ textarea::placeholder { color:#777f95; }
   .note { margin-top:8px; }
 }
 
+
+/* OMNIX mobile-first redesign v2 */
+:root {
+  --bg0:#070910; --bg1:#0c1020; --surface:#111727; --surface2:#171e31;
+  --line:rgba(157,170,205,.16); --violet:#9a7bff; --cyan:#6ee7f9;
+}
+html, body { min-height:100%; }
+body {
+  min-height:100dvh;
+  background:
+    radial-gradient(600px 420px at 50% -170px,rgba(124,92,255,.27),transparent 75%),
+    radial-gradient(420px 360px at 100% 45%,rgba(34,211,238,.055),transparent 75%),
+    var(--bg0);
+}
+header {
+  display:grid; grid-template-columns:1fr auto; align-items:center;
+  gap:12px; padding:13px clamp(14px,3vw,28px);
+  border-bottom:1px solid var(--line); background:rgba(7,9,16,.82);
+}
+header > div:first-child { min-width:0; }
+.logo { position:relative; display:flex; align-items:center; gap:10px; letter-spacing:.19em; }
+.logo:before {
+  content:"✳"; display:grid; place-items:center; width:34px; height:34px;
+  border-radius:12px; color:#fff; font-size:20px; letter-spacing:0;
+  background:linear-gradient(145deg,#a78bfa,#6366f1 58%,#22d3ee);
+  box-shadow:0 5px 22px #7c3aed40;
+}
+.mode-switch { grid-column:2; grid-row:1; }
+.status { grid-column:1 / -1; justify-self:start; margin:0; font-size:10px; }
+main { width:100%; max-width:980px; margin:0 auto; padding:clamp(14px,3vw,30px); }
+.welcome {
+  max-width:660px; margin:clamp(6vh,11vh,13vh) auto 34px;
+  padding:clamp(8px,2vw,22px); text-align:center;
+}
+.orb {
+  width:76px; height:76px; margin:0 auto 27px;
+  background:radial-gradient(circle at 30% 25%,#fff 0%,#a5f3fc 7%,#60a5fa 27%,#8b5cf6 58%,#312e81 83%);
+  box-shadow:0 0 26px #8b5cf655,0 0 85px #22d3ee18,inset 0 0 16px #fff5;
+}
+.orb:before { content:""; position:absolute; inset:-15px; border:1px solid #a78bfa24; border-radius:50%; }
+h1 { font-size:clamp(34px,7vw,52px); letter-spacing:-.055em; }
+.subtitle { max-width:430px; margin:0 auto; font-size:15px; color:#9da8c2; }
+.suggestions { max-width:520px; gap:9px; margin:30px auto 0; }
+.suggestions button {
+  min-height:48px; display:flex; align-items:center; justify-content:center; gap:7px;
+  border-radius:14px; border-color:var(--line); background:linear-gradient(145deg,#141a2a,#0e1320);
+  color:#dfe5f7; box-shadow:inset 0 1px #ffffff05; font-size:13px;
+}
+.suggestions button:active { transform:scale(.98); }
+#messages { max-width:790px; padding-bottom:12px; }
+.message { position:relative; padding:16px 18px; font-size:14px; line-height:1.75; }
+.user { background:linear-gradient(135deg,rgba(98,75,181,.32),rgba(29,40,66,.88)); border-color:#9380e833; }
+.assistant { background:linear-gradient(145deg,rgba(17,23,39,.97),rgba(12,16,28,.97)); border-color:rgba(148,163,184,.15); }
+.assistant strong { color:#c8baff; }
+footer {
+  padding:12px 14px max(12px,env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(7,9,16,.72),rgba(7,9,16,.97));
+}
+.memory-tools { justify-content:space-between; align-items:center; margin-bottom:10px; }
+.memory-tools button { font-size:11px; color:#aeb8d1; }
+.memory-tools button:first-child { color:#d7ccff; }
+.composer {
+  border-radius:22px; padding:7px; background:#111727;
+  border:1px solid #353c54; box-shadow:0 12px 40px #0005;
+}
+textarea { font-size:15px; min-height:46px; }
+#send { border-radius:15px; font-size:22px; }
+.note { opacity:.75; }
+#voicePanel { margin:12px auto 24px; padding:28px 20px; border-radius:26px; }
+.voice-orb { width:100px; height:100px; }
+@media (min-width:700px) {
+  header { grid-template-columns:1fr auto auto; }
+  .mode-switch { grid-column:2; grid-row:1; }
+  .status { grid-column:3; grid-row:1; justify-self:end; }
+  main { min-height:calc(100dvh - 150px); }
+  footer { padding-left:24px; padding-right:24px; }
+}
+@media (max-width:520px) {
+  header { grid-template-columns:1fr auto; gap:10px; padding:12px; }
+  .logo { font-size:18px; }
+  .logo:before { width:31px; height:31px; }
+  .mode-switch { grid-column:1 / -1; grid-row:2; width:100%; }
+  .status { grid-column:1 / -1; grid-row:3; }
+  .welcome { margin-top:7vh; padding:4px 0; }
+  .orb { width:70px; height:70px; }
+  .suggestions { grid-template-columns:1fr 1fr; }
+  .suggestions button { border-radius:13px; min-height:52px; }
+  .message { font-size:14px; padding:13px 14px; }
+  .memory-tools { justify-content:space-between; }
+}
+
 </style>
 </head>
 <body>
@@ -162,8 +253,8 @@ textarea::placeholder { color:#777f95; }
 <main id="chat">
   <section class="welcome" id="welcome">
     <div class="orb"></div>
-    <h1>Think beyond.</h1>
-    <p class="subtitle">Your ideas. Your questions.<br>One intelligent workspace.</p>
+    <h1>Your AI. Your space.</h1>
+    <p class="subtitle">Think clearly. Create freely. Get things done.<br>Welcome to your personal AI workspace.</p>
     <div class="suggestions">
       <button onclick="suggest('Help me learn coding')">💻 Learn coding</button>
       <button onclick="suggest('Explain artificial intelligence')">🧠 Explore AI</button>
