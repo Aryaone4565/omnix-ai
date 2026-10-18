@@ -943,7 +943,7 @@ async function startVoiceSession() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.token) throw new Error(data.error || "Live Voice setup failed (" + response.status + ").");
     const { GoogleGenAI, Modality } = await import("https://esm.sh/@google/genai");
-    const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: "v1alpha" } });
+    const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: "v1beta" } });
     liveSession = await ai.live.connect({
       model: "gemini-3.8-live",
       config: {
