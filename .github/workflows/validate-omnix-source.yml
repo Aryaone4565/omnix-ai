@@ -1,0 +1,80 @@
+name: Validate OMNIX source
+
+on:
+  pull_request:
+    paths:
+      - "worker.js"
+      - "index.html"
+      - ".github/workflows/validate-omnix-source.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "worker.js"
+      - "index.html"
+      - ".github/workflows/validate-omnix-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Syntax and security invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check Worker JavaScript syntax
+        run: |
+          cp worker.js /tmp/omnix-worker.mjs
+          node --check /tmp/omnix-worker.mjs
+
+      - name: Check inline website JavaScript syntax
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const html = fs.readFileSync("index.html", "utf8");
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+          let written = 0;
+          for (const [index, match] of scripts.entries()) {
+            if (!match[2].trim()) continue;
+            const extension = /\btype=["']module["']/.test(match[1]) ? "mjs" : "js";
+            fs.writeFileSync(`/tmp/omnix-inline-${index}.${extension}`, match[2]);
+            written++;
+          }
+          if (!written) throw new Error("No inline scripts found to validate.");
+          console.log(`Extracted ${written} inline script(s).`);
+          NODE
+          for file in /tmp/omnix-inline-*; do
+            [ -e "$file" ] || continue
+            node --check "$file"
+          done
+
+      - name: Check security and feature invariants
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const worker = fs.readFileSync("worker.js", "utf8");
+          const html = fs.readFileSync("index.html", "utf8");
+          const checks = [
+            ["Firebase UID is derived from verified token", worker.includes("const userId = authenticatedUser.uid;")],
+            ["Memory queries are user-scoped", /WHERE user_id = \?/.test(worker)],
+            ["Quota tracking fails closed", worker.includes("rejecting request:") && worker.includes("trackingAvailable: false")],
+            ["Quota tracking failure returns 503", worker.includes("if (!quota.trackingAvailable)")],
+            ["High thinking is configured", worker.includes('thinkingLevel: "high"')],
+            ["Gemini image route exists", worker.includes('"/generate-image"')],
+            ["Image mode calls the authenticated API helper", html.includes('API_URL + "/generate-image"') && html.includes('headers.set("Authorization", "Bearer " + token)')]
+          ];
+          for (const [name, passed] of checks) {
+            console.log(`${passed ? "PASS" : "FAIL"}: ${name}`);
+          }
+          if (checks.some(([, passed]) => !passed)) process.exit(1);
+          NODE
