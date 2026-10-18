@@ -630,6 +630,61 @@ export default {
       });
     }
 
+    const url = new URL(request.url);
+
+    // Mint a short-lived Gemini Live token for the browser/mobile voice client.
+    // This route must be handled separately from the normal chat endpoint, which
+    // requires a user message and otherwise returns "Type a message first."
+    if (url.pathname.replace(/\\/+$/, "") === "/live-token") {
+      if (request.method !== "POST") {
+        return json({ error: "Method not allowed." }, 405);
+      }
+      if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed." }, 403);
+      const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+      if (isRateLimited(ip)) {
+        return json({ error: "Too many requests. Please wait a minute and try again." }, 429);
+      }
+      if (!env.GEMINI_API_KEY) {
+        return json({ error: "AI engine is not configured. Add the GEMINI_API_KEY Worker secret." }, 500);
+      }
+
+      try {
+        const tokenResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": env.GEMINI_API_KEY
+          },
+          body: JSON.stringify({
+            uses: 1,
+            expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
+            liveConnectConstraints: {
+              model: "models/gemini-3.8-live",
+              config: {
+                responseModalities: ["AUDIO"],
+                sessionResumption: {},
+                inputAudioTranscription: {},
+                outputAudioTranscription: {}
+              }
+            }
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        const tokenData = await tokenResponse.json().catch(() => ({}));
+        if (!tokenResponse.ok || !tokenData.name) {
+          console.error("Gemini Live token provisioning failed:", tokenResponse.status, JSON.stringify(tokenData.error || {}).slice(0, 500));
+          return json({
+            error: tokenData.error?.message || "Gemini Live token provisioning failed (" + tokenResponse.status + ")."
+          }, 502);
+        }
+        return json({ token: tokenData.name, expireTime: tokenData.expireTime || null });
+      } catch (error) {
+        console.error("Gemini Live token provisioning exception:", String(error?.message || error).slice(0, 300));
+        return json({ error: "Could not provision a Gemini Live token. Check Worker logs and Gemini API access." }, 502);
+      }
+    }
+
     if (request.method !== "POST") {
       return json({ error: "Method not allowed." }, 405);
     }
