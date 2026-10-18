@@ -472,9 +472,11 @@ async function handleGmailCommand(command, pending) {
   const text = String(command || "").trim();
   const sendMatch = text.match(/^(?:hey omnix[,! ]*)?please?\s*(?:send)(?: an?)?\s+email\s+to\s+([^\s,]+)\s+subject\s*[:=]\s*([\s\S]+?)\s+body\s*[:=]\s*([\s\S]+)$/i)
     || text.match(/^(?:hey omnix[,! ]*)?send(?: an?)?\s+email\s+to\s+([^\s,]+)\s+subject\s*[:=]\s*([\s\S]+?)\s+body\s*[:=]\s*([\s\S]+)$/i);
+  const deleteLatestMatch = /^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:latest|newest|most recent)\s+(?:email|message)(?:\s+(?:in|from)\s+(?:my\s+)?(?:gmail\s+)?inbox)?[.!]?$/i.test(text)
+    || /^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:email|message)\s+(?:at the top|on top)\s+of\s+(?:my\s+)?inbox[.!]?$/i.test(text);
   const deleteMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:email|message)\s+from\s+([^\s]+)\s+subject\s*[:=]\s*([\s\S]+)$/i);
   const searchMatch = text.match(/^(?:hey omnix[,! ]*)?(?:please\s+)?(?:delete|trash|move to trash)\s+(?:the\s+)?(?:email|message)\s+matching\s+([\s\S]+)$/i);
-  if (!sendMatch && !deleteMatch && !searchMatch) return false;
+  if (!sendMatch && !deleteMatch && !searchMatch && !deleteLatestMatch) return false;
   try {
     const status = await gmailCommandRequest("/gmail/status");
     if (!status.connected) {
@@ -498,10 +500,12 @@ async function handleGmailCommand(command, pending) {
       return true;
     }
     let query;
-    if (deleteMatch) {
+    if (deleteLatestMatch) {
+      query = "in:inbox";
+    } else if (deleteMatch) {
       const sender = deleteMatch[1].trim();
       const subject = deleteMatch[2].trim().replace(/^["']|["']$/g, "");
-      query = "from:" + sender + ' subject:"' + subject.replace(/"/g, "") + '"';
+      query = "in:inbox from:" + sender + ' subject:"' + subject.replace(/"/g, "") + '"';
     } else {
       query = searchMatch[1].trim().slice(0, 250);
     }
@@ -510,7 +514,7 @@ async function handleGmailCommand(command, pending) {
       pending.textContent = "I couldn't find an email matching: " + query + ". Nothing was deleted.";
       return true;
     }
-    if (found.messages.length !== 1) {
+    if (!deleteLatestMatch && found.messages.length !== 1) {
       pending.textContent = "I found " + found.messages.length + " matching emails, so I won't guess which one to delete. Narrow the search with a sender and exact subject, for example:\nDelete email from person@example.com subject: Invoice October\n\nNothing was deleted.";
       return true;
     }
