@@ -58,6 +58,29 @@ jobs:
             node --check "$file"
           done
 
+      - name: Test memory perspective normalization
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const vm = require("node:vm");
+          const worker = fs.readFileSync("worker.js", "utf8");
+          const match = worker.match(/function normalizeExplicitMemory\(value\) \{[\s\S]*?\n\}/);
+          if (!match) throw new Error("normalizeExplicitMemory was not found.");
+          const context = {};
+          vm.runInNewContext(match[0] + "\nthis.normalizeExplicitMemory = normalizeExplicitMemory;", context);
+          const cases = [
+            ["Remember that I am his creator", "The signed-in user identifies themselves as OMNIX's creator."],
+            ["I'm your creator.", "The signed-in user identifies themselves as OMNIX's creator."],
+            ["My name is Arya", "The signed-in user's name is Arya."],
+            ["I like astronomy", "The signed-in user like astronomy."]
+          ];
+          for (const [input, expected] of cases) {
+            const actual = context.normalizeExplicitMemory(input.replace(/^Remember that /i, ""));
+            if (actual !== expected) throw new Error(JSON.stringify({ input, expected, actual }));
+            console.log("PASS: " + input);
+          }
+          NODE
+
       - name: Check security and feature invariants
         run: |
           node <<'NODE'
