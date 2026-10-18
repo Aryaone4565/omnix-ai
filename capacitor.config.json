@@ -1,0 +1,17 @@
+{
+  "appId": "com.arya.omnix",
+  "appName": "OMNIX",
+  "webDir": "www",
+  "server": {
+    "url": "https://aryaone4565.github.io/omnix-ai/",
+    "cleartext": false,
+    "allowNavigation": [
+      "aryaone4565.github.io",
+      "omnix-connect.aryaone4565.workers.dev",
+      "omnix-brain.aryaone4565.workers.dev"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
