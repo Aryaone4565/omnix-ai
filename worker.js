@@ -884,6 +884,9 @@ export default {
       }
 
       const quota = await consumeDailyQuota(env.OMNIX_DB, userId);
+      if (!quota.trackingAvailable) {
+        return json({ error: "OMNIX usage protection is temporarily unavailable. Please try again shortly." }, 503);
+      }
       if (!quota.userAllowed) {
         return json({
           error: "You've reached OMNIX's limit of 1,000 AI messages for this browser today. Please try again tomorrow."
