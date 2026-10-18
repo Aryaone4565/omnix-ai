@@ -12,7 +12,7 @@ function corsHeaders() {
   return {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Vary": "Origin"
   };
 }
@@ -26,6 +26,78 @@ function json(data, status = 200) {
       ...corsHeaders()
     }
   });
+}
+
+
+const FIREBASE_PROJECT_ID = "omnix-ai-4565";
+let firebaseJwksCache = null;
+let firebaseJwksExpiresAt = 0;
+
+function decodeBase64Url(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+function decodeJwtPart(value) {
+  return JSON.parse(new TextDecoder().decode(decodeBase64Url(value)));
+}
+
+async function getFirebaseJwks(forceRefresh = false) {
+  if (!forceRefresh && firebaseJwksCache && Date.now() < firebaseJwksExpiresAt) return firebaseJwksCache;
+  const response = await fetch("https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com", {
+    headers: { "Accept": "application/json" },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error("Could not load Firebase signing keys.");
+  const data = await response.json();
+  if (!Array.isArray(data.keys) || !data.keys.length) throw new Error("Firebase signing keys were missing.");
+  firebaseJwksCache = data.keys;
+  firebaseJwksExpiresAt = Date.now() + 50 * 60 * 1000;
+  return firebaseJwksCache;
+}
+
+async function verifyFirebaseRequest(request) {
+  const authorization = request.headers.get("Authorization") || "";
+  const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
+  if (!match) return null;
+  try {
+    const token = match[1];
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const header = decodeJwtPart(parts[0]);
+    const claims = decodeJwtPart(parts[1]);
+    if (header.alg !== "RS256" || typeof header.kid !== "string") return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    if (claims.aud !== FIREBASE_PROJECT_ID ||
+        claims.iss !== "https://securetoken.google.com/" + FIREBASE_PROJECT_ID ||
+        typeof claims.sub !== "string" || !claims.sub || claims.sub.length > 128 ||
+        !Number.isFinite(claims.exp) || claims.exp <= now ||
+        !Number.isFinite(claims.iat) || claims.iat > now + 60 ||
+        !Number.isFinite(claims.auth_time) || claims.auth_time > now + 60) return null;
+
+    let keys = await getFirebaseJwks(false);
+    let jwk = keys.find(key => key.kid === header.kid && key.alg === "RS256");
+    if (!jwk) {
+      keys = await getFirebaseJwks(true);
+      jwk = keys.find(key => key.kid === header.kid && key.alg === "RS256");
+    }
+    if (!jwk) return null;
+
+    const publicKey = await crypto.subtle.importKey(
+      "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
+    );
+    const signedData = new TextEncoder().encode(parts[0] + "." + parts[1]);
+    const validSignature = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5", publicKey, decodeBase64Url(parts[2]), signedData
+    );
+    return validSignature ? { uid: claims.sub, email: claims.email || null } : null;
+  } catch (error) {
+    console.error("Firebase ID token verification failed:", String(error?.message || error).slice(0, 180));
+    return null;
+  }
 }
 
 function validUserId(value) {
@@ -51,7 +123,7 @@ function isRateLimited(key) {
   return false;
 }
 
-// Persistent daily limits: 1,000 AI messages per browser ID and a 400-request
+// Persistent daily limits: 1,000 AI messages per signed-in account and a 400-request
 // daily Gemini safety cap, leaving headroom below the model's 500 RPD quota.
 async function consumeDailyQuota(db, userId) {
   try {
@@ -640,6 +712,8 @@ export default {
         return json({ error: "Method not allowed." }, 405);
       }
       if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed." }, 403);
+      const authenticatedUser = await verifyFirebaseRequest(request);
+      if (!authenticatedUser) return json({ error: "Sign in to OMNIX AI to use Live Voice." }, 401);
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
       if (isRateLimited(ip)) {
         return json({ error: "Too many requests. Please wait a minute and try again." }, 429);
@@ -694,6 +768,9 @@ export default {
     // CORS is a browser restriction, not authentication; clients can spoof Origin.
     if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed." }, 403);
 
+    const authenticatedUser = await verifyFirebaseRequest(request);
+    if (!authenticatedUser) return json({ error: "Sign in to OMNIX AI with Firebase first." }, 401);
+
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
     if (isRateLimited(ip)) {
       return json({ error: "Too many requests. Please wait a minute and try again." }, 429);
@@ -711,17 +788,15 @@ export default {
       return json({ error: "Send valid JSON." }, 400);
     }
 
-    const userId = body?.userId;
-    if (!validUserId(userId)) {
-      return json({ error: "Missing or invalid browser user ID. Refresh OMNIX and try again." }, 400);
-    }
+    // Never trust a browser-supplied userId; scope all memory/quota rows to the verified Firebase UID.
+    const userId = authenticatedUser.uid;
 
     try {
       const message = getMessageText(body);
       if (!message) return json({ error: "Type a message first." }, 400);
       const lower = message.toLowerCase();
 
-      // Show saved memories for this browser ID.
+      // Show saved memories for this signed-in account.
       if (/^(show|list|what are) (my )?(saved )?memories\??$/.test(lower) ||
           lower === "what do you remember about me?") {
         const rows = await env.OMNIX_DB
@@ -737,13 +812,13 @@ export default {
         });
       }
 
-      // Delete saved memories only for this browser ID.
+      // Delete saved memories only for this signed-in account.
       if (/^(forget|delete|clear) (all )?(my )?(saved )?memories\.?$/i.test(message)) {
         await env.OMNIX_DB
           .prepare("DELETE FROM memories WHERE user_id = ?")
           .bind(userId)
           .run();
-        return json({ reply: "Done. I've deleted the saved memories associated with this browser ID." });
+        return json({ reply: "Done. I've deleted the saved memories associated with this signed-in account." });
       }
 
       // Only explicit memory requests are stored.
@@ -767,7 +842,7 @@ export default {
         }
 
         return json({
-          reply: "Got it — I've saved that in OMNIX's persistent memory for this browser."
+          reply: "Got it — I've saved that in OMNIX's persistent memory for your signed-in account."
         });
       }
 
