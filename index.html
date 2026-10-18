@@ -239,6 +239,30 @@ textarea { font-size:15px; min-height:46px; }
   .memory-tools { justify-content:space-between; }
 }
 
+
+/* Hybrid ChatGPT + JARVIS + OMNIX dashboard home */
+.system-kicker { display:flex; align-items:center; justify-content:center; gap:8px; margin:0 auto 28px; color:#a8b4d0; font-size:10px; font-weight:700; letter-spacing:.16em; }
+.system-dot { width:7px; height:7px; border-radius:50%; background:#5eead4; box-shadow:0 0 12px #5eead488; }
+.kicker-sep { color:#59627a; }
+.dashboard-heading { display:flex; justify-content:space-between; gap:12px; margin:31px 2px 12px; color:#818ba5; font-size:10px; font-weight:700; letter-spacing:.13em; text-align:left; }
+.dashboard-tools { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; max-width:570px; margin:0 auto; text-align:left; }
+.dashboard-card { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; min-height:132px; padding:15px 13px; border-radius:17px; border:1px solid rgba(157,170,205,.16); color:#edf0fb; background:linear-gradient(145deg,rgba(23,30,49,.92),rgba(12,16,28,.96)); text-align:left; cursor:pointer; transition:transform .18s,border-color .18s,background .18s; }
+.dashboard-card:active { transform:scale(.98); }
+.dashboard-card:hover { border-color:#8b75db77; background:linear-gradient(145deg,#1a2035,#111625); }
+.dashboard-icon { display:grid; place-items:center; width:31px; height:31px; border-radius:11px; color:#d7ccff; background:rgba(139,92,246,.14); border:1px solid rgba(167,139,250,.17); font-size:17px; }
+.dashboard-card-title { font-size:13px; font-weight:700; }
+.dashboard-card-sub { font-size:10px; line-height:1.45; color:#8f9ab5; }
+.dashboard-arrow { position:absolute; top:15px; right:13px; color:#717d99; font-size:14px; }
+@media(max-width:520px) {
+ .system-kicker { font-size:9px; margin-bottom:23px; }
+ .dashboard-tools { grid-template-columns:1fr; gap:8px; }
+ .dashboard-card { min-height:82px; padding:12px 13px 12px 55px; justify-content:center; gap:4px; }
+ .dashboard-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); }
+ .dashboard-card-title { font-size:13px; }
+ .dashboard-card-sub { font-size:11px; }
+ .dashboard-arrow { top:29px; }
+}
+
 </style>
 </head>
 <body>
@@ -252,6 +276,7 @@ textarea { font-size:15px; min-height:46px; }
 </header>
 <main id="chat">
   <section class="welcome" id="welcome">
+    <div class="system-kicker"><span class="system-dot"></span> PERSONAL AI SYSTEM <span class="kicker-sep">/</span> OMNIX CORE</div>
     <div class="orb"></div>
     <h1>Your AI. Your space.</h1>
     <p class="subtitle">Think clearly. Create freely. Get things done.<br>Welcome to your personal AI workspace.</p>
@@ -260,6 +285,18 @@ textarea { font-size:15px; min-height:46px; }
       <button onclick="suggest('Explain artificial intelligence')">🧠 Explore AI</button>
       <button onclick="suggest('Help me build a website')">🌐 Build a website</button>
       <button onclick="suggest('Give me an interesting space fact')">🚀 Explore space</button>
+    </div>
+    <div class="dashboard-heading"><span>YOUR WORKSPACE</span><span>QUICK ACCESS ↘</span></div>
+    <div class="dashboard-tools">
+      <button type="button" class="dashboard-card" onclick="window.location.href='./connectors.html'">
+        <span class="dashboard-icon">⌘</span><span class="dashboard-card-title">Connectors</span><span class="dashboard-card-sub">Connected apps & services</span><span class="dashboard-arrow">↗</span>
+      </button>
+      <button type="button" class="dashboard-card" onclick="memoryAction('show')">
+        <span class="dashboard-icon">◉</span><span class="dashboard-card-title">Memory</span><span class="dashboard-card-sub">Your saved context</span><span class="dashboard-arrow">↗</span>
+      </button>
+      <button type="button" class="dashboard-card" onclick="voiceModeBtn.click()">
+        <span class="dashboard-icon">◖))</span><span class="dashboard-card-title">Live Voice</span><span class="dashboard-card-sub">Talk naturally with OMNIX</span><span class="dashboard-arrow">↗</span>
+      </button>
     </div>
   </section>
   <section id="voicePanel" hidden aria-live="polite">
