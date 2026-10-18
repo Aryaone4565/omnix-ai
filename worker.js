@@ -649,7 +649,7 @@ export default {
       }
 
       try {
-        const tokenResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {
+        const tokenResponse = await fetch("https://generativelanguage.googleapis.com/v1alpha/auth_tokens", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
