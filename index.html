@@ -264,9 +264,9 @@ async function handleGmailSearchCommand(command, pending) {
   const period7 = /\b(?:last|past|previous)\s+7\s+days?\b/i.test(text);
   const period1 = /\b(?:today|since today)\b/i.test(text);
   let query = "in:inbox";
-  if (period30) query = "in:anywhere newer_than:30d";
-  else if (period7) query = "in:anywhere newer_than:7d";
-  else if (period1) query = "in:anywhere newer_than:1d";
+  if (period30) query = "in:inbox newer_than:30d";
+  else if (period7) query = "in:inbox newer_than:7d";
+  else if (period1) query = "in:inbox newer_than:1d";
   try {
     const status = await gmailCommandRequest("/gmail/status");
     if (!status.connected) {
