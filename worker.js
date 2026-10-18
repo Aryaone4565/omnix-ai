@@ -177,7 +177,12 @@ function normalizeExplicitMemory(value) {
   if (name) return "The signed-in user's name is " + name[1].trim() + ".";
   const preference = raw.match(/^i\s+(like|love|prefer|enjoy|hate|dislike|study|work on|am learning)\s+(.{2,900})$/i);
   if (preference) {
-    const verb = preference[1].toLowerCase() === "am learning" ? "is learning" : preference[1].toLowerCase();
+    const verbs = {
+      "like": "likes", "love": "loves", "prefer": "prefers", "enjoy": "enjoys",
+      "hate": "hates", "dislike": "dislikes", "study": "studies",
+      "work on": "works on", "am learning": "is learning"
+    };
+    const verb = verbs[preference[1].toLowerCase()] || preference[1].toLowerCase();
     return "The signed-in user " + verb + " " + preference[2].trim() + ".";
   }
   const identity = raw.match(/^(?:i am|i'm|im)\s+(.{2,900})$/i);
