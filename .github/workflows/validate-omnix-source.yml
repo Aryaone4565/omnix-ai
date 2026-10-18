@@ -72,7 +72,7 @@ jobs:
             ["Remember that I am his creator", "The signed-in user identifies themselves as OMNIX's creator."],
             ["I'm your creator.", "The signed-in user identifies themselves as OMNIX's creator."],
             ["My name is Arya", "The signed-in user's name is Arya."],
-            ["I like astronomy", "The signed-in user like astronomy."]
+            ["I like astronomy", "The signed-in user likes astronomy."]
           ];
           for (const [input, expected] of cases) {
             const actual = context.normalizeExplicitMemory(input.replace(/^Remember that /i, ""));
