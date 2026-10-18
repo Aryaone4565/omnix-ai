@@ -256,6 +256,47 @@ async function gmailCommandRequest(path, options = {}) {
   if (!response.ok) throw new Error(data.error || ("Gmail connector HTTP " + response.status));
   return data;
 }
+async function handleGmailSearchCommand(command, pending) {
+  const text = String(command || "").trim();
+  const wantsSearch = /\b(?:search|find|look for|show)\b[\s\S]{0,100}\b(?:my\s+)?(?:inbox|emails?|mail|messages)\b/i.test(text);
+  if (!wantsSearch || /\b(?:delete|trash|move to trash|send email)\b/i.test(text)) return false;
+  const period30 = /\b(?:last|past|previous)\s+30\s+days?\b|\b30\s+days?\b/i.test(text);
+  const period7 = /\b(?:last|past|previous)\s+7\s+days?\b/i.test(text);
+  const period1 = /\b(?:today|since today)\b/i.test(text);
+  let query = "in:inbox";
+  if (period30) query = "in:anywhere newer_than:30d";
+  else if (period7) query = "in:anywhere newer_than:7d";
+  else if (period1) query = "in:anywhere newer_than:1d";
+  try {
+    const status = await gmailCommandRequest("/gmail/status");
+    if (!status.connected) {
+      pending.textContent = "Gmail isn't connected to this OMNIX browser yet. Open Connectors → Gmail and connect it first.";
+      return true;
+    }
+    pending.textContent = "🔎 Searching Gmail…";
+    const found = await gmailCommandRequest("/gmail/search?q=" + encodeURIComponent(query));
+    const emails = Array.isArray(found.messages) ? found.messages : [];
+    if (!emails.length) {
+      pending.textContent = "📭 No emails found for this search. Query: " + query;
+      return true;
+    }
+    const lines = ["🔎 Gmail search results", "", "Found " + emails.length + " message(s). Search: " + query, ""];
+    emails.slice(0, 20).forEach((m, i) => {
+      lines.push((i + 1) + ". " + (m.subject || "(No subject)"));
+      lines.push("   From: " + (m.from || "Unknown sender"));
+      lines.push("   Date: " + (m.date || "Unknown date"));
+      if (m.snippet) lines.push("   " + String(m.snippet).slice(0, 220));
+      lines.push("");
+    });
+    if (emails.length > 20) lines.push("Showing the first 20 results.");
+    renderFormattedText(pending, lines.join("\n"));
+    return true;
+  } catch (error) {
+    pending.textContent = "Gmail search failed: " + (error.message || "Unknown error") + ". No emails were changed.";
+    return true;
+  }
+}
+
 async function handleGmailCommand(command, pending) {
   const text = String(command || "").trim();
   const sendMatch = text.match(/^(?:hey omnix[,! ]*)?please?\s*(?:send)(?: an?)?\s+email\s+to\s+([^\s,]+)\s+subject\s*[:=]\s*([\s\S]+?)\s+body\s*[:=]\s*([\s\S]+)$/i)
@@ -444,6 +485,11 @@ async function submitMessage() {
   const pending = addMessage("Thinking…", "assistant");
 
   try {
+    if (await handleGmailSearchCommand(text, pending)) {
+      conversation.push({ role: "assistant", content: pending.textContent });
+      statusLabel.textContent = "● GMAIL CONNECTOR";
+      return;
+    }
     if (await handleGmailCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
