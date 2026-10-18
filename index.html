@@ -43,6 +43,8 @@ footer { padding: 14px; border-top: 1px solid #252832; }
 textarea { flex: 1; min-width: 0; resize: none; height: 45px; max-height: 120px; background: transparent; color: white; border: none; outline: none; padding: 12px 8px; font: inherit; }
 #send { width: 45px; border: none; border-radius: 12px; background: #8b5cf6; color: white; font-size: 20px; cursor: pointer; }
 #send:disabled { opacity: .55; cursor: wait; }
+#imageMode { min-width: 42px; border: 1px solid #343846; border-radius: 12px; background: #151821; color: #c4b5fd; font-size: 19px; cursor: pointer; }
+#imageMode.active { background: #6d28d9; color: #fff; border-color: #8b5cf6; }
 .memory-tools { max-width: 700px; margin: 0 auto 8px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; }
 .memory-tools button { background:#151821; color:#c4b5fd; border:1px solid #343846; padding:7px 10px; border-radius:9px; font-size:12px; cursor:pointer; }
 .note { text-align: center; color: #71717a; font-size: 11px; margin-top: 10px; }
@@ -357,6 +359,7 @@ body.authenticated footer { display:block; }
   <div class="memory-tools" id="memoryTools"><button type="button" onclick="memoryAction('show')">🧠 My memories</button><button type="button" onclick="memoryAction('clear')">Forget memories</button></div>
   <div class="composer" id="composer">
     <textarea id="input" placeholder="Ask OMNIX anything..." rows="1" aria-label="Message"></textarea>
+    <button id="imageMode" type="button" aria-label="Toggle image generation" aria-pressed="false" title="Generate an image">🎨</button>
     <button id="send" aria-label="Send message">↑</button>
   </div>
   <div class="note">OMNIX can make mistakes. Verify important information.</div>
@@ -367,8 +370,21 @@ const input = document.getElementById("input");
 const messages = document.getElementById("messages");
 const welcome = document.getElementById("welcome");
 const send = document.getElementById("send");
+const imageModeBtn = document.getElementById("imageMode");
 const statusLabel = document.getElementById("status");
 const conversation = [];
+let imageMode = false;
+
+function toggleImageMode() {
+  imageMode = !imageMode;
+  imageModeBtn.classList.toggle("active", imageMode);
+  imageModeBtn.setAttribute("aria-pressed", String(imageMode));
+  input.placeholder = imageMode ? "Describe the image OMNIX should create..." : "Ask OMNIX anything...";
+  statusLabel.textContent = imageMode ? "● IMAGE GENERATION MODE" : "● AI ONLINE";
+  input.focus();
+}
+
+imageModeBtn.addEventListener("click", toggleImageMode);
 // The browser no longer invents a persistent identity. The Worker derives userId from a verified Firebase ID token.
 const userId = null;
 window.OMNIX_API_URL = API_URL;
@@ -745,6 +761,40 @@ async function submitMessage() {
   const pending = addMessage("Thinking…", "assistant");
 
   try {
+    if (imageMode) {
+      imageMode = false;
+      imageModeBtn.classList.remove("active");
+      imageModeBtn.setAttribute("aria-pressed", "false");
+      input.placeholder = "Ask OMNIX anything...";
+      const response = await window.omnixApiFetch(API_URL + "/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+        signal: AbortSignal.timeout(55000)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Image generation failed.");
+      if (typeof data.imageData !== "string" || !data.imageData) throw new Error("OMNIX did not return image data.");
+      const mimeType = /^image\/(?:png|jpeg|webp)$/i.test(data.mimeType || "") ? data.mimeType : "image/png";
+      pending.replaceChildren();
+      const caption = document.createElement("div");
+      caption.textContent = data.reply || "Here's the image I generated for you.";
+      pending.appendChild(caption);
+      const image = document.createElement("img");
+      image.src = "data:" + mimeType + ";base64," + data.imageData;
+      image.alt = "AI-generated image: " + text;
+      image.loading = "lazy";
+      image.style.display = "block";
+      image.style.width = "100%";
+      image.style.maxWidth = "512px";
+      image.style.height = "auto";
+      image.style.borderRadius = "12px";
+      image.style.marginTop = "10px";
+      pending.appendChild(image);
+      conversation.push({ role: "assistant", content: "Generated an image from this prompt: " + text });
+      statusLabel.textContent = "● GEMINI IMAGE ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
+      return;
+    }
     if (await handleGmailSearchCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
