@@ -649,23 +649,25 @@ export default {
       }
 
       try {
-        const tokenResponse = await fetch("https://generativelanguage.googleapis.com/v1alpha/auth_tokens", {
+        const tokenResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/auth_tokens", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "x-goog-api-key": env.GEMINI_API_KEY
           },
           body: JSON.stringify({
-            uses: 1,
-            expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
-            liveConnectConstraints: {
-              model: "models/gemini-3.8-live",
-              config: {
-                responseModalities: ["AUDIO"],
-                sessionResumption: {},
-                inputAudioTranscription: {},
-                outputAudioTranscription: {}
+            authToken: {
+              uses: 1,
+              expireTime: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+              newSessionExpireTime: new Date(Date.now() + 60 * 1000).toISOString(),
+              liveConnectConstraints: {
+                model: "models/gemini-3.8-live",
+                config: {
+                  responseModalities: ["AUDIO"],
+                  sessionResumption: {},
+                  inputAudioTranscription: {},
+                  outputAudioTranscription: {}
+                }
               }
             }
           }),
