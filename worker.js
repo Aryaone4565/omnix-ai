@@ -635,7 +635,7 @@ export default {
     // Mint a short-lived Gemini Live token for the browser/mobile voice client.
     // This route must be handled separately from the normal chat endpoint, which
     // requires a user message and otherwise returns "Type a message first."
-    if (url.pathname.replace(/\\/+$/, "") === "/live-token") {
+    if (url.pathname.replace(/\/+$/, "") === "/live-token") {
       if (request.method !== "POST") {
         return json({ error: "Method not allowed." }, 405);
       }
