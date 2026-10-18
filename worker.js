@@ -614,7 +614,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI, ski
             contents,
             generationConfig: { maxOutputTokens: 2048, thinkingConfig: { thinkingLevel: "high" } }
           }),
-          signal: AbortSignal.timeout(model === MODEL ? 7_500 : (lastStatus === 429 ? 3_500 : 6_000))
+          signal: AbortSignal.timeout(model === MODEL ? 15_000 : (lastStatus === 429 ? 3_500 : 6_000))
         });
         data = await response.json().catch(() => ({}));
       } catch (error) {
@@ -651,7 +651,7 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI, ski
     }
 
     // Some accounts may not yet have access to the newest primary model; try the stable fallback on 404 too.
-    if (![408, 429, 404, 502, 503, 504].includes(lastStatus)) break;
+    if (![408, 429, 403, 404, 502, 503, 504].includes(lastStatus)) break;
   }
 
   // Independent fallback: Cloudflare Workers AI, if the AI binding is configured.
