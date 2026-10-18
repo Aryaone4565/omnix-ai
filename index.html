@@ -263,17 +263,58 @@ textarea { font-size:15px; min-height:46px; }
  .dashboard-arrow { top:29px; }
 }
 
+
+/* Firebase account gate */
+#authPanel { min-height:calc(100dvh - 90px); display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+#authPanel[hidden], body.authenticated #authPanel { display:none !important; }
+body:not(.authenticated) main, body:not(.authenticated) footer { display:none !important; }
+body.authenticated main { display:block; }
+body.authenticated footer { display:block; }
+.auth-card { width:min(100%,420px); padding:28px 22px; border:1px solid rgba(157,170,205,.2); border-radius:24px; background:linear-gradient(145deg,rgba(20,25,42,.98),rgba(10,14,25,.98)); box-shadow:0 24px 70px #0006; }
+.auth-card h1 { font-size:30px; margin:20px 0 8px; }
+.auth-card p { color:#9da8c2; line-height:1.6; font-size:13px; }
+.auth-card label { display:block; margin:15px 0 7px; color:#cbd5e1; font-size:12px; }
+.auth-card input { display:block; width:100%; padding:13px 14px; border:1px solid #343c53; border-radius:12px; background:#0b1020; color:#fff; font:inherit; outline:none; }
+.auth-card input:focus { border-color:#9a7bff; box-shadow:0 0 0 3px #8b5cf622; }
+.auth-buttons { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:16px; }
+.auth-buttons button, #googleSignInBtn { border:1px solid #48405f; border-radius:12px; padding:12px 10px; color:#fff; background:#211b36; font:inherit; cursor:pointer; }
+.auth-buttons button:first-child { background:linear-gradient(135deg,#8b5cf6,#6d28d9); }
+#googleSignInBtn { width:100%; margin-top:10px; background:#151b2b; border-color:#394158; }
+.auth-divider { margin:17px 0 4px; text-align:center; color:#69748d; font-size:11px; }
+#authStatus { min-height:20px; overflow-wrap:anywhere; }
+#signOutBtn { border:1px solid #343846; border-radius:10px; padding:7px 10px; color:#d7ccff; background:#151821; cursor:pointer; font-size:12px; }
+#signOutBtn[hidden] { display:none; }
+@media(max-width:520px) { .auth-card { padding:24px 18px; } .auth-buttons button { font-size:12px; } }
+
 </style>
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="logo">OMNIX</div><a href="./connectors.html" style="font-size:12px;color:#c4b5fd;text-decoration:none;border:1px solid #343846;background:#151821;padding:8px 10px;border-radius:10px">🔌 Connectors</a></div>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="logo">OMNIX</div><a href="./connectors.html" style="font-size:12px;color:#c4b5fd;text-decoration:none;border:1px solid #343846;background:#151821;padding:8px 10px;border-radius:10px">🔌 Connectors</a> <button type="button" id="signOutBtn" hidden>Sign out</button></div>
   <div class="mode-switch" role="group" aria-label="Chat mode">
     <button type="button" id="textModeBtn" class="mode-btn active" aria-pressed="true">Text</button>
     <button type="button" id="voiceModeBtn" class="mode-btn" aria-pressed="false">🎙 Live Voice</button>
   </div>
   <div class="status" id="status">● CONNECTING TO AI</div>
 </header>
+<section id="authPanel" aria-labelledby="authHeading">
+  <div class="auth-card">
+    <div class="logo auth-logo">OMNIX</div>
+    <h1 id="authHeading">Your AI. Your space.</h1>
+    <p>Sign in to access your personal OMNIX workspace. Your saved memories will be tied to your account.</p>
+    <label for="authEmail">Email address</label>
+    <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com">
+    <label for="authPassword">Password</label>
+    <input id="authPassword" type="password" autocomplete="current-password" placeholder="Enter your password">
+    <div class="auth-buttons">
+      <button type="button" id="emailSignInBtn">Sign in</button>
+      <button type="button" id="emailSignUpBtn">Create account</button>
+    </div>
+    <div class="auth-divider">OR</div>
+    <button type="button" id="googleSignInBtn">Continue with Google</button>
+    <p id="authStatus" role="status" aria-live="polite">Connecting to secure sign-in…</p>
+  </div>
+</section>
 <main id="chat">
   <section class="welcome" id="welcome">
     <div class="system-kicker"><span class="system-dot"></span> PERSONAL AI SYSTEM <span class="kicker-sep">/</span> OMNIX CORE</div>
@@ -328,18 +369,17 @@ const welcome = document.getElementById("welcome");
 const send = document.getElementById("send");
 const statusLabel = document.getElementById("status");
 const conversation = [];
-const USER_ID_KEY = "omnix_persistent_user_id_v1";
-function getUserId() {
-  let id = localStorage.getItem(USER_ID_KEY);
-  if (!id) {
-    id = crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c==="x"?r:(r&3|8)).toString(16); });
-    localStorage.setItem(USER_ID_KEY, id);
-  }
-  return id;
-}
-const userId = getUserId();
+// The browser no longer invents a persistent identity. The Worker derives userId from a verified Firebase ID token.
+const userId = null;
 window.OMNIX_API_URL = API_URL;
-window.omnixGetContext = () => ({ userId, recentMessages: conversation.slice(-8) });
+window.omnixGetContext = () => ({ userId: window.omnixFirebaseUser?.uid || null, recentMessages: conversation.slice(-8) });
+window.omnixApiFetch = async (url, options = {}) => {
+  if (typeof window.omnixGetIdToken !== "function") throw new Error("Secure sign-in is still loading. Please try again.");
+  const token = await window.omnixGetIdToken();
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", "Bearer " + token);
+  return fetch(url, { ...options, headers });
+};
 window.omnixAppendConversation = (role, content) => {
   if (typeof content === "string" && content.trim()) conversation.push({ role, content: content.trim() });
 };
@@ -620,7 +660,7 @@ async function handleGmailReadCommand(command, pending) {
 
     const contextMessages = conversation.slice(-20, -1);
     contextMessages.push({ role: "user", content: prompt });
-    const response = await fetch(API_URL, {
+    const response = await window.omnixApiFetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, messages: contextMessages }),
@@ -725,7 +765,7 @@ async function submitMessage() {
       statusLabel.textContent = "● SOCIAL CONNECTOR";
       return;
     }
-    const response = await fetch(API_URL, {
+    const response = await window.omnixApiFetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, messages: conversation.slice(-20) }),
@@ -764,7 +804,7 @@ async function memoryAction(action) {
   statusLabel.textContent = "● CHECKING MEMORY";
   const pending = addMessage("Checking memory…", "assistant");
   try {
-    const response = await fetch(API_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({userId, message}) });
+    const response = await window.omnixApiFetch(API_URL, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({userId, message}) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Memory request failed.");
     pending.textContent = data.reply;
@@ -786,6 +826,91 @@ input.addEventListener("keydown", function(event) {
 });
 </script>
 <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, createUserWithEmailAndPassword,
+  signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAMqeYuoMQT99usNPVSQx_tjNBGokhDj_c",
+  authDomain: "omnix-ai-4565.firebaseapp.com",
+  projectId: "omnix-ai-4565",
+  storageBucket: "omnix-ai-4565.firebasestorage.app",
+  messagingSenderId: "60865483812",
+  appId: "1:60865483812:web:ca30227b5fa4ea8a1574b1",
+  measurementId: "G-SL1MJWDD89"
+};
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+const authPanel = document.getElementById("authPanel");
+const authStatus = document.getElementById("authStatus");
+const authEmail = document.getElementById("authEmail");
+const authPassword = document.getElementById("authPassword");
+const signOutBtn = document.getElementById("signOutBtn");
+const emailSignInBtn = document.getElementById("emailSignInBtn");
+const emailSignUpBtn = document.getElementById("emailSignUpBtn");
+const googleSignInBtn = document.getElementById("googleSignInBtn");
+window.omnixFirebaseUser = null;
+window.omnixGetIdToken = async () => {
+  const user = window.omnixFirebaseUser;
+  if (!user) throw new Error("Please sign in to OMNIX AI first.");
+  return user.getIdToken();
+};
+async function runAuth(action) {
+  const email = authEmail.value.trim();
+  const password = authPassword.value;
+  authStatus.textContent = "Please wait…";
+  emailSignInBtn.disabled = emailSignUpBtn.disabled = googleSignInBtn.disabled = true;
+  try {
+    if (action === "google") {
+      await signInWithPopup(auth, googleProvider);
+    } else {
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address.");
+      if (password.length < 6) throw new Error("Use a password with at least 6 characters.");
+      if (action === "signup") await createUserWithEmailAndPassword(auth, email, password);
+      else await signInWithEmailAndPassword(auth, email, password);
+    }
+    authStatus.textContent = "Signed in successfully.";
+  } catch (error) {
+    const messages = {
+      "auth/email-already-in-use": "An account already uses this email. Try signing in instead.",
+      "auth/invalid-credential": "Email or password is incorrect.",
+      "auth/weak-password": "Choose a stronger password (at least 6 characters).",
+      "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+      "auth/popup-blocked": "Your browser blocked the sign-in popup. Allow popups and try again.",
+      "auth/network-request-failed": "Network error. Check your connection and try again."
+    };
+    authStatus.textContent = messages[error?.code] || error?.message || "Sign-in failed. Please try again.";
+  } finally {
+    emailSignInBtn.disabled = emailSignUpBtn.disabled = googleSignInBtn.disabled = false;
+  }
+}
+emailSignInBtn.addEventListener("click", () => runAuth("signin"));
+emailSignUpBtn.addEventListener("click", () => runAuth("signup"));
+googleSignInBtn.addEventListener("click", () => runAuth("google"));
+signOutBtn.addEventListener("click", async () => {
+  signOutBtn.disabled = true;
+  try { await signOut(auth); }
+  catch (error) { authStatus.textContent = error?.message || "Could not sign out."; }
+  finally { signOutBtn.disabled = false; }
+});
+onAuthStateChanged(auth, user => {
+  window.omnixFirebaseUser = user;
+  document.body.classList.toggle("authenticated", Boolean(user));
+  authPanel.hidden = Boolean(user);
+  signOutBtn.hidden = !user;
+  if (user) {
+    authStatus.textContent = "";
+    document.getElementById("status").textContent = "● SIGNED IN";
+  } else {
+    authStatus.textContent = "Sign in to continue.";
+    document.getElementById("status").textContent = "● SIGN-IN REQUIRED";
+  }
+});
+
 const textModeBtn = document.getElementById("textModeBtn");
 const voiceModeBtn = document.getElementById("voiceModeBtn");
 const voicePanel = document.getElementById("voicePanel");
@@ -934,7 +1059,7 @@ async function startVoiceSession() {
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access requires a secure HTTPS page and a supported browser.");
     const context = window.omnixGetContext();
-    const response = await fetch(window.OMNIX_API_URL + "/live-token", {
+    const response = await window.omnixApiFetch(window.OMNIX_API_URL + "/live-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(context),
