@@ -650,8 +650,8 @@ async function callGemini(systemInstruction, contents, apiKey, cloudflareAI, ski
       break;
     }
 
-    // A 429 can be model-specific. Briefly try the alternate model too, then use Workers AI.
-    if (![408, 429, 502, 503, 504].includes(lastStatus)) break;
+    // Some accounts may not yet have access to the newest primary model; try the stable fallback on 404 too.
+    if (![408, 429, 404, 502, 503, 504].includes(lastStatus)) break;
   }
 
   // Independent fallback: Cloudflare Workers AI, if the AI binding is configured.
@@ -925,7 +925,9 @@ export default {
         }
 
         return json({
-          reply: "Got it — I've saved that in OMNIX's persistent memory for your signed-in account."
+          reply: memory === "The signed-in user identifies themselves as OMNIX's creator."
+            ? "Got it — I'll remember that you're my creator."
+            : "Got it — I've saved that to your OMNIX memory."
         });
       }
 
