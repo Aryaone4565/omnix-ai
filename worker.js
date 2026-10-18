@@ -919,7 +919,7 @@ export default {
             .bind(
               userId,
               memory,
-              /creator|created|my name|i am|i'm/i.test(memory) ? "identity" : "general"
+              /creator|created|signed-in user's name|identifies themselves|says they are/i.test(memory) ? "identity" : "general"
             )
             .run();
         }
