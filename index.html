@@ -547,15 +547,23 @@ async function handleGmailCommand(command, pending) {
       query = searchMatch[1].trim().slice(0, 250);
     }
     const found = await gmailCommandRequest("/gmail/search?q=" + encodeURIComponent(query));
-    if (!found.messages || found.messages.length === 0) {
+    const matches = Array.isArray(found.messages) ? found.messages.slice() : [];
+    if (deleteLatestMatch) {
+      matches.sort((a, b) => {
+        const da = Date.parse(a.date || "") || 0;
+        const db = Date.parse(b.date || "") || 0;
+        return db - da;
+      });
+    }
+    if (matches.length === 0) {
       pending.textContent = "I couldn't find an email matching: " + query + ". Nothing was deleted.";
       return true;
     }
-    if (!deleteLatestMatch && found.messages.length !== 1) {
-      pending.textContent = "I found " + found.messages.length + " matching emails, so I won't guess which one to delete. Narrow the search with a sender and exact subject, for example:\nDelete email from person@example.com subject: Invoice October\n\nNothing was deleted.";
+    if (!deleteLatestMatch && matches.length !== 1) {
+      pending.textContent = "I found " + matches.length + " matching emails, so I won't guess which one to delete. Narrow the search with a sender and exact subject, for example:\nDelete email from person@example.com subject: Invoice October\n\nNothing was deleted.";
       return true;
     }
-    const m = found.messages[0];
+    const m = matches[0];
     if (!confirm("Move this email to Gmail Trash?\n\nFrom: " + (m.from || "Unknown") + "\nSubject: " + (m.subject || "(No subject)") + "\nDate: " + (m.date || "Unknown") + "\n\nThis is reversible from Gmail Trash. OMNIX will not permanently delete it.")) {
       pending.textContent = "Cancelled. The email was not moved.";
       return true;
