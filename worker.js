@@ -3,7 +3,19 @@ const MODEL = "gemini-3.5-flash-lite";
 const FALLBACK_MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
-const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. You normally use Google Gemini, and Cloudflare Workers AI may answer when Gemini is unavailable. Do not misrepresent which provider answered. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date.`;
+const BASE_INSTRUCTION = `You are OMNIX, an AI assistant created by Arya Gupta in 2026 and powered by Google's Gemini API. You are a separate project from ChatGPT/OpenAI. You normally use Google Gemini, and Cloudflare Workers AI may answer when Gemini is unavailable. Do not misrepresent which provider answered. Be helpful, accurate, friendly, concise, and honest. Never claim to have memories that are not supplied in the current context or stored memory. If asked who created you, say Arya Gupta created you in 2026. Do not invent an exact creation date. When interpreting persistent memories, treat first-person words such as "I", "me", and "my" as referring to the signed-in user who supplied the memory, and "you" or "your" as OMNIX only when the user directed those words at OMNIX. Never reverse the relationship between the user and assistant. For memory requests, confirm the intended meaning naturally rather than repeating the original sentence.`;
+
+function normalizeMemoryFact(value) {
+  const original = String(value || "").trim().replace(/\s+/g, " ").slice(0, 1000);
+  const clean = original.replace(/[.!?]+$/, "").trim();
+  // A memory request is written from the user's perspective. Canonicalize the
+  // creator relationship so OMNIX does not store it as if OMNIX were the creator.
+  if (/^(?:i am|i'm|im)\s+(?:his|her|its|your|the|omnix's)\s+creator$/i.test(clean) ||
+      /^(?:i created|i have created|i am the creator of|i'm the creator of)\s+(?:you|omnix)$/i.test(clean)) {
+    return "The user is OMNIX's creator.";
+  }
+  return original;
+}
 
 const requestHits = new Map();
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -156,9 +168,9 @@ async function consumeDailyQuota(db, userId) {
       userRequestsToday: userUsage.request_count
     };
   } catch (error) {
-    // Keep OMNIX usable if quota tracking has a temporary D1 problem.
-    console.error("OMNIX daily quota tracking unavailable; allowing request:", String(error?.message || error));
-    return { userAllowed: true, geminiAllowed: true, trackingAvailable: false };
+    // Fail closed if usage tracking is unavailable, preventing unmetered AI requests.
+    console.error("OMNIX daily quota tracking unavailable; rejecting request:", String(error?.message || error));
+    return { userAllowed: false, geminiAllowed: false, trackingAvailable: false };
   }
 }
 
@@ -821,10 +833,11 @@ export default {
         return json({ reply: "Done. I've deleted the saved memories associated with this signed-in account." });
       }
 
-      // Only explicit memory requests are stored.
+      // Only explicit memory requests are stored. Normalize the user's point of view
+      // for common identity facts before saving them.
       const explicit = message.match(/^(?:omnix[, ]*)?(?:remember(?: that)?|save (?:this|that))\s*[:,-]?\s*(.{3,1000})$/i);
       if (explicit) {
-        const memory = explicit[1].trim().slice(0, 1000);
+        const memory = normalizeMemoryFact(explicit[1]);
         const exists = await env.OMNIX_DB
           .prepare("SELECT id FROM memories WHERE user_id = ? AND lower(memory) = lower(?) LIMIT 1")
           .bind(userId, memory)
@@ -841,8 +854,11 @@ export default {
             .run();
         }
 
+        const creatorMemory = memory === "The user is OMNIX's creator.";
         return json({
-          reply: "Got it — I've saved that in OMNIX's persistent memory for your signed-in account."
+          reply: creatorMemory
+            ? "Got it — I'll remember that you're my creator."
+            : "Got it — I've saved that for your signed-in account."
         });
       }
 
@@ -868,6 +884,9 @@ export default {
       }
 
       const quota = await consumeDailyQuota(env.OMNIX_DB, userId);
+      if (!quota.trackingAvailable) {
+        return json({ error: "OMNIX usage protection is temporarily unavailable. Please try again shortly." }, 503);
+      }
       if (!quota.userAllowed) {
         return json({
           error: "You've reached OMNIX's limit of 1,000 AI messages for this browser today. Please try again tomorrow."
