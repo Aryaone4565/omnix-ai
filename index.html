@@ -143,8 +143,8 @@ function suggest(text) {
 
 
 function renderInlineMarkdown(parent, text) {
-  // Safe, small Markdown subset: formatting is built with DOM nodes, never raw HTML.
-  const pattern = /(\\*\\*\\*([^*]+?)\\*\\*\\*|\\*\\*([^*]+?)\\*\\*|__([^_]+?)__|\\*([^*\\n]+?)\\*|_([^_\\n]+?)_|\x60([^\x60]+?)\x60)/g;
+  // Safe Markdown subset: build DOM nodes rather than interpreting raw HTML.
+  const pattern = /(\*\*\*([^*]+?)\*\*\*|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\n]+?)\*|_([^_\n]+?)_|\x60([^\x60]+?)\x60)/g;
   let last = 0, match;
   while ((match = pattern.exec(text)) !== null) {
     parent.appendChild(document.createTextNode(text.slice(last, match.index)));
@@ -161,13 +161,13 @@ function renderInlineMarkdown(parent, text) {
 }
 
 function renderFormattedText(element, text) {
-  const source = String(text == null ? "" : text).replace(/\\r\\n?/g, "\\n");
+  const source = String(text == null ? "" : text).replace(/\r\n?/g, "\n");
   element.replaceChildren();
-  const lines = source.split("\\n");
+  const lines = source.split("\n");
   let list = null;
   for (const line of lines) {
-    const bullet = /^\\s*[-*]\\s+(.+)$/.exec(line);
-    const numbered = /^\\s*\\d+[.)]\\s+(.+)$/.exec(line);
+    const bullet = /^\s*[-*]\s+(.+)$/.exec(line);
+    const numbered = /^\s*\d+[.)]\s+(.+)$/.exec(line);
     if (bullet || numbered) {
       const kind = bullet ? "ul" : "ol";
       if (!list || list.tagName.toLowerCase() !== kind) {
@@ -187,7 +187,7 @@ function renderFormattedText(element, text) {
       element.appendChild(gap);
       continue;
     }
-    const heading = /^(#{1,3})\\s+(.+)$/.exec(line);
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
     const block = document.createElement("div");
     block.className = heading ? "md-heading md-h" + heading[1].length : "md-line";
     renderInlineMarkdown(block, heading ? heading[2] : line);
