@@ -705,7 +705,7 @@ async function handleGmailReadCommand(command, pending) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, messages: contextMessages }),
-      signal: AbortSignal.timeout(35000)
+      signal: AbortSignal.timeout(60000)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || typeof data.reply !== "string" || !data.reply.trim()) {
