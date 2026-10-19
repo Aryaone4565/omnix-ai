@@ -782,26 +782,26 @@ async function submitMessage() {
   conversation.push({ role: "user", content: text });
   input.value = "";
   send.disabled = true;
-  statusLabel.textContent = "● OMNIX IS THINKING";
+  statusLabel.textContent = imageMode ? "● GENERATING IMAGE" : "● OMNIX IS THINKING";
   const pending = addMessage(imageMode ? "Generating image…" : "Thinking…", "assistant");
 
   try {
-    if (await handleGmailSearchCommand(text, pending)) {
+    if (!imageMode && await handleGmailSearchCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (await handleGmailCommand(text, pending)) {
+    if (!imageMode && await handleGmailCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (await handleGmailReadCommand(text, pending)) {
+    if (!imageMode && await handleGmailReadCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (await handleSocialCommand(text, pending)) {
+    if (!imageMode && await handleSocialCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● SOCIAL CONNECTOR";
       return;
