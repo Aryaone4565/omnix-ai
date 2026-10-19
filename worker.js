@@ -474,5 +474,4 @@ async function searchWeb(env, query) {
     providers.push(["Google News RSS", () => searchGoogleNewsRSS(query)]);
     providers.push(["DuckDuckGo", () => searchDuckDuckGo(cleanedQuery)]);
   } else {
-    providers.push(["DuckDuckGo", () => searchDuckDuckGo(cleanedQuery)]);
-    providers.push(["Wikipedia", () => searchWikipedia(cleanedQue --- TRUNCATED --- 43,646 chars
+    providers.push(["DuckDuckGo", () => searchDuckDuck --- TRUNCATED --- 43,646 chars
