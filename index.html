@@ -857,6 +857,7 @@ async function submitMessage() {
       pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + errorMessage + ")";
       statusLabel.textContent = "● CONNECTION ISSUE";
     }
+    conversation.push({ role: "assistant", content: pending.textContent });
   } finally {
     send.disabled = false;
     input.focus();
