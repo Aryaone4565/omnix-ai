@@ -848,7 +848,9 @@ async function submitMessage() {
     statusLabel.textContent = "● " + providerLabel + " ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
   } catch (error) {
     const errorMessage = error.message || "Unknown error";
-    if (imageMode || /image generation failed|Gemini denied the image request|Gemini rejected the image request|Gemini image generation is rate-limited|configured Gemini image model/i.test(errorMessage)) {
+    const wasImageMode = imageMode;
+    if (wasImageMode) toggleImageMode();
+    if (wasImageMode || /image generation failed|Gemini denied the image request|Gemini rejected the image request|Gemini image generation is rate-limited|configured Gemini image model/i.test(errorMessage)) {
       pending.textContent = "Image generation failed. " + errorMessage + " This does not necessarily mean your internet connection is down. No image was generated.";
       statusLabel.textContent = "● IMAGE GENERATION ISSUE";
     } else {
