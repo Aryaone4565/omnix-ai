@@ -841,8 +841,24 @@ export default {
           });
           const imageData = await imageResponse.json().catch(() => ({}));
           if (!imageResponse.ok) {
-            console.error("Gemini image generation failed:", imageResponse.status, JSON.stringify(imageData?.error || {}).slice(0, 500));
-            return json({ error: "Gemini image generation failed. The image model may be unavailable or its API quota may be exhausted.", upstreamStatus: imageResponse.status }, 502);
+            const upstreamStatus = imageResponse.status;
+            const upstreamMessage = String(imageData?.error?.message || "").slice(0, 300);
+            console.error("Gemini image generation failed:", upstreamStatus, JSON.stringify(imageData?.error || {}).slice(0, 500));
+
+            // Give the UI a useful, non-secret diagnostic without exposing raw provider details.
+            let error = "Gemini image generation failed. Check the Worker logs for details.";
+            if (upstreamStatus === 400) {
+              error = "Gemini rejected the image request (HTTP 400). The model name or request format may be unsupported.";
+            } else if (upstreamStatus === 401 || upstreamStatus === 403) {
+              error = "Gemini denied the image request (HTTP " + upstreamStatus + "). Check API-key validity, project access, and billing permissions.";
+            } else if (upstreamStatus === 404) {
+              error = "The configured Gemini image model was not found or is unavailable to this API project (HTTP 404).";
+            } else if (upstreamStatus === 429) {
+              error = "Gemini image generation is rate-limited or over quota (HTTP 429). Check the project's quota and billing status.";
+            } else if (upstreamStatus >= 500) {
+              error = "Gemini's image service returned a server error (HTTP " + upstreamStatus + "). Try again later.";
+            }
+            return json({ error, upstreamStatus, diagnostic: upstreamMessage }, 502);
           }
           const parts = imageData.candidates?.[0]?.content?.parts || [];
           const imagePart = parts.find(part => part?.inlineData?.data && /^image\/(png|jpeg|webp)$/i.test(part.inlineData.mimeType || ""));
