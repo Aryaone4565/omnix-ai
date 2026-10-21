@@ -869,6 +869,7 @@ async function memoryAction(action) {
   if (action === "clear" && !confirm("Delete all saved memories for this browser? This cannot be undone.")) return;
   welcome.style.display = "none";
   addMessage(message, "user");
+  conversation.push({ role: "user", content: message });
   send.disabled = true;
   statusLabel.textContent = "● CHECKING MEMORY";
   const pending = addMessage("Checking memory…", "assistant");
@@ -877,9 +878,11 @@ async function memoryAction(action) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Memory request failed.");
     pending.textContent = data.reply;
+    conversation.push({ role: "assistant", content: data.reply });
     statusLabel.textContent = "● AI ONLINE";
   } catch (error) {
     pending.textContent = "Could not access memory: " + (error.message || "Network error");
+    conversation.push({ role: "assistant", content: pending.textContent });
     statusLabel.textContent = "● CONNECTION ISSUE";
   } finally {
     send.disabled = false;
