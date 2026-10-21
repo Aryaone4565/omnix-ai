@@ -814,7 +814,10 @@ async function submitMessage() {
         signal: AbortSignal.timeout(90000)
       });
       const imageData = await imageResponse.json().catch(() => ({}));
-      if (!imageResponse.ok) throw new Error(imageData.error || "Image generation failed (" + imageResponse.status + ").");
+      if (!imageResponse.ok) {
+        const upstreamStatus = imageData.upstreamStatus || imageResponse.status;
+        throw new Error((imageData.error || "Image generation failed.") + " (upstream HTTP " + upstreamStatus + ")");
+      }
       if (!imageData.image || typeof imageData.image.data !== "string") throw new Error("OMNIX did not receive a generated image. Please try again.");
       renderGeneratedImage(pending, imageData.image, text);
       conversation.push({ role: "assistant", content: "Generated an image for: " + text });
@@ -844,8 +847,14 @@ async function submitMessage() {
     const providerLabel = String(data.model || "").startsWith("cloudflare:") ? "BACKUP AI" : "GEMINI";
     statusLabel.textContent = "● " + providerLabel + " ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
   } catch (error) {
-    pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + (error.message || "Network error") + ")";
-    statusLabel.textContent = "● CONNECTION ISSUE";
+    const errorMessage = error.message || "Unknown error";
+    if (imageMode || /image generation failed|Gemini denied the image request|Gemini rejected the image request|Gemini image generation is rate-limited|configured Gemini image model/i.test(errorMessage)) {
+      pending.textContent = "Image generation failed. " + errorMessage + " This does not necessarily mean your internet connection is down. No image was generated.";
+      statusLabel.textContent = "● IMAGE GENERATION ISSUE";
+    } else {
+      pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + errorMessage + ")";
+      statusLabel.textContent = "● CONNECTION ISSUE";
+    }
   } finally {
     send.disabled = false;
     input.focus();
