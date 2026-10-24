@@ -1,0 +1,49 @@
+name: OMNIX syntax checks
+
+on:
+  push:
+    branches:
+      - fix/omnix-image-generation-errors
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  syntax:
+    name: Check Worker and browser JavaScript syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Cloudflare Worker syntax
+        run: node --check worker.js
+
+      - name: Extract and check JavaScript in index.html
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          html = pathlib.Path("index.html").read_text(encoding="utf-8")
+          scripts = re.findall(r'<script\b([^>]*)>(.*?)</script\s*>', html, re.IGNORECASE | re.DOTALL)
+          if not scripts:
+              raise SystemExit("No script blocks found in index.html")
+
+          for index, (attributes, source) in enumerate(scripts, start=1):
+              is_module = re.search(r"""type\s*=\s*["']module["']""", attributes, re.IGNORECASE)
+              suffix = "mjs" if is_module else "js"
+              path = pathlib.Path(f"/tmp/omnix-script-{index}.{suffix}")
+              path.write_text(source, encoding="utf-8")
+              print(f"Prepared {path.name} for syntax checking")
+          PY
+          for file in /tmp/omnix-script-*; do
+            [ -f "$file" ] || continue
+            node --check "$file"
+          done

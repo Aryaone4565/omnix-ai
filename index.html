@@ -47,24 +47,9 @@ textarea { flex: 1; min-width: 0; resize: none; height: 45px; max-height: 120px;
 .memory-tools button { background:#151821; color:#c4b5fd; border:1px solid #343846; padding:7px 10px; border-radius:9px; font-size:12px; cursor:pointer; }
 .note { text-align: center; color: #71717a; font-size: 11px; margin-top: 10px; }
 button:active { transform: scale(.97); }
-.mode-switch { display:flex; gap:6px; padding:4px; border:1px solid #292d3a; border-radius:12px; background:#11141b; }
-.mode-btn { border:0; border-radius:9px; padding:9px 12px; color:#a1a1aa; background:transparent; cursor:pointer; font-size:13px; white-space:nowrap; }
-.mode-btn.active { color:#fff; background:#6d28d9; }
-#voicePanel { max-width:700px; margin:18px auto; padding:24px 18px; border:1px solid #343846; border-radius:20px; background:radial-gradient(circle at top,#20183d,#11141b 65%); text-align:center; }
-#voicePanel[hidden] { display:none !important; }
-.voice-orb { width:94px; height:94px; border-radius:50%; margin:4px auto 18px; background:radial-gradient(circle at 30% 25%,#67e8f9,#7c3aed 58%,#151821); box-shadow:0 0 35px #7c3aed55; }
-#voicePanel h2 { margin:8px 0; font-size:22px; }
-#voiceStatus { color:#c4b5fd; font-size:14px; line-height:1.6; margin:10px auto 18px; }
-.voice-actions { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
-.voice-actions button { border:1px solid #51417a; border-radius:12px; padding:12px 18px; font:inherit; color:white; background:#6d28d9; cursor:pointer; }
-.voice-actions button.secondary { background:#181b24; border-color:#343846; }
-.voice-actions button:disabled { opacity:.55; cursor:wait; }
-.voice-note { color:#71717a; font-size:11px; line-height:1.5; max-width:480px; margin:16px auto 0; }
 @media (max-width:520px) {
   header { flex-wrap:wrap; gap:10px; padding:12px; }
   .logo { font-size:20px; }
-  .mode-switch { order:3; width:100%; justify-content:center; }
-  .mode-btn { flex:1; }
   .status { margin-left:auto; }
 }
 
@@ -122,13 +107,6 @@ textarea::placeholder { color:#777f95; }
 .memory-tools button { border-radius:999px; padding:8px 12px; background:rgba(20,23,34,.85); border-color:#303448; transition:all .18s; }
 .memory-tools button:hover { border-color:#8b5cf6; color:#e9ddff; }
 .memory-tools button.active { border-color:#8b5cf6; background:#211b36; color:#fff; }
-.mode-switch { border-radius:999px; padding:3px; background:#11131d; border-color:#292d3d; }
-.mode-btn { border-radius:999px; padding:9px 13px; }
-.mode-btn.active { background:linear-gradient(135deg,#8b5cf6,#6d28d9); box-shadow:0 2px 10px #6d28d944; }
-#voicePanel { background:radial-gradient(ellipse at top,rgba(91,33,182,.28),rgba(17,20,30,.96) 65%); border-color:rgba(167,139,250,.24); box-shadow:0 18px 50px rgba(0,0,0,.2); }
-.voice-orb { box-shadow:0 0 35px #7c3aed55,0 0 75px #38bdf822; }
-.voice-actions button { background:linear-gradient(135deg,#8b5cf6,#6d28d9); border-color:#8b5cf6; }
-.voice-actions button.secondary { background:#181b24; border-color:#343846; }
 .note { color:#70788e; font-size:11px; }
 @keyframes omniRise { from { opacity:0; transform:translateY(9px); } to { opacity:1; transform:translateY(0); } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none !important; scroll-behavior:auto !important; transition:none !important; } }
@@ -176,7 +154,6 @@ header > div:first-child { min-width:0; }
   background:linear-gradient(145deg,#a78bfa,#6366f1 58%,#22d3ee);
   box-shadow:0 5px 22px #7c3aed40;
 }
-.mode-switch { grid-column:2; grid-row:1; }
 .status { grid-column:1 / -1; justify-self:start; margin:0; font-size:10px; }
 main { width:100%; max-width:980px; margin:0 auto; padding:clamp(14px,3vw,30px); }
 .welcome {
@@ -217,11 +194,8 @@ footer {
 textarea { font-size:15px; min-height:46px; }
 #send { border-radius:15px; font-size:22px; }
 .note { opacity:.75; }
-#voicePanel { margin:12px auto 24px; padding:28px 20px; border-radius:26px; }
-.voice-orb { width:100px; height:100px; }
 @media (min-width:700px) {
   header { grid-template-columns:1fr auto auto; }
-  .mode-switch { grid-column:2; grid-row:1; }
   .status { grid-column:3; grid-row:1; justify-self:end; }
   main { min-height:calc(100dvh - 150px); }
   footer { padding-left:24px; padding-right:24px; }
@@ -230,7 +204,6 @@ textarea { font-size:15px; min-height:46px; }
   header { grid-template-columns:1fr auto; gap:10px; padding:12px; }
   .logo { font-size:18px; }
   .logo:before { width:31px; height:31px; }
-  .mode-switch { grid-column:1 / -1; grid-row:2; width:100%; }
   .status { grid-column:1 / -1; grid-row:3; }
   .welcome { margin-top:7vh; padding:4px 0; }
   .orb { width:70px; height:70px; }
@@ -292,10 +265,6 @@ body.authenticated footer { display:block; }
 <body>
 <header>
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="logo">OMNIX</div><a href="./connectors.html" style="font-size:12px;color:#c4b5fd;text-decoration:none;border:1px solid #343846;background:#151821;padding:8px 10px;border-radius:10px">🔌 Connectors</a> <button type="button" id="signOutBtn" hidden>Sign out</button></div>
-  <div class="mode-switch" role="group" aria-label="Chat mode">
-    <button type="button" id="textModeBtn" class="mode-btn active" aria-pressed="true">Text</button>
-    <button type="button" id="voiceModeBtn" class="mode-btn" aria-pressed="false">🎙 Live Voice</button>
-  </div>
   <div class="status" id="status">● CONNECTING TO AI</div>
 </header>
 <section id="authPanel" aria-labelledby="authHeading">
@@ -336,26 +305,10 @@ body.authenticated footer { display:block; }
       <button type="button" class="dashboard-card" onclick="memoryAction('show')">
         <span class="dashboard-icon">◉</span><span class="dashboard-card-title">Memory</span><span class="dashboard-card-sub">Your saved context</span><span class="dashboard-arrow">↗</span>
       </button>
-      <button type="button" class="dashboard-card" onclick="voiceModeBtn.click()">
-        <span class="dashboard-icon">◖))</span><span class="dashboard-card-title">Live Voice</span><span class="dashboard-card-sub">Talk naturally with OMNIX</span><span class="dashboard-arrow">↗</span>
-      </button>
-    </div>
-  </section>
-  <section id="voicePanel" hidden aria-live="polite">
-    <div class="voice-orb" aria-hidden="true"></div>
-    <h2>OMNIX Live Voice</h2>
-    <p class="subtitle">Talk naturally with OMNIX. Your saved memories and recent text-chat context are included.</p>
-    <div id="voiceStatus">Tap Start Voice and allow microphone access.</div>
-    <div class="voice-actions">
-      <button type="button" id="voiceConnectBtn">🎙 Start Voice</button>
-      <button type="button" id="voiceStopBtn" class="secondary" disabled>End session</button>
-    </div>
-    <p class="voice-note">Uses Google Gemini Live. Microphone audio is sent to Google for real-time responses. Voice sessions may be limited by model availability, quota, and session duration.</p>
-  </section>
-  <div id="messages" aria-live="polite"></div>
+      <div id="messages" aria-live="polite"></div>
 </main>
 <footer>
-  <div class="memory-tools" id="memoryTools"><button type="button" id="imageModeBtn" onclick="toggleImageMode()">🖼 Generate image</button><button type="button" onclick="memoryAction('show')">🧠 My memories</button><button type="button" onclick="memoryAction('clear')">Forget memories</button></div>
+  <div class="memory-tools" id="memoryTools"><button type="button" onclick="memoryAction('show')">🧠 My memories</button><button type="button" onclick="memoryAction('clear')">Forget memories</button></div>
   <div class="composer" id="composer">
     <textarea id="input" placeholder="Ask OMNIX anything..." rows="1" aria-label="Message"></textarea>
     <button id="send" aria-label="Send message">↑</button>
@@ -370,7 +323,6 @@ const welcome = document.getElementById("welcome");
 const send = document.getElementById("send");
 const statusLabel = document.getElementById("status");
 const conversation = [];
-let imageMode = false;
 // The browser no longer invents a persistent identity. The Worker derives userId from a verified Firebase ID token.
 const userId = null;
 window.OMNIX_API_URL = API_URL;
@@ -391,45 +343,6 @@ function suggest(text) {
   input.focus();
 }
 
-
-function toggleImageMode() {
-  imageMode = !imageMode;
-  const button = document.getElementById("imageModeBtn");
-  button.classList.toggle("active", imageMode);
-  button.textContent = imageMode ? "🖼 Image mode ON" : "🖼 Generate image";
-  input.placeholder = imageMode ? "Describe the image you want OMNIX to generate..." : "Ask OMNIX anything...";
-  statusLabel.textContent = imageMode ? "● IMAGE GENERATION READY" : "● AI ONLINE";
-  input.focus();
-}
-
-function renderGeneratedImage(element, image, prompt) {
-  element.replaceChildren();
-  const caption = document.createElement("div");
-  caption.textContent = "Generated image";
-  element.appendChild(caption);
-  const mime = ["image/png", "image/jpeg", "image/webp"].includes(image?.mimeType) ? image.mimeType : "image/png";
-  const src = "data:" + mime + ";base64," + image.data;
-  const img = document.createElement("img");
-  img.src = src;
-  img.alt = "AI-generated image for: " + prompt;
-  img.loading = "lazy";
-  img.style.width = "100%";
-  img.style.maxWidth = "640px";
-  img.style.height = "auto";
-  img.style.display = "block";
-  img.style.marginTop = "12px";
-  img.style.borderRadius = "14px";
-  element.appendChild(img);
-  const link = document.createElement("a");
-  link.href = src;
-  link.download = "omnix-generated-image." + ({"image/jpeg":"jpg","image/webp":"webp","image/png":"png"}[mime] || "png");
-  link.textContent = "Download image";
-  link.style.display = "inline-block";
-  link.style.marginTop = "10px";
-  link.style.color = "#c4b5fd";
-  link.rel = "noopener";
-  element.appendChild(link);
-}
 
 function renderInlineMarkdown(parent, text) {
   // Safe Markdown subset: build DOM nodes rather than interpreting raw HTML.
@@ -776,76 +689,53 @@ async function handleSocialCommand(command, pending) {
 async function submitMessage() {
   const text = input.value.trim();
   if (!text || send.disabled) return;
-
   welcome.style.display = "none";
   addMessage(text, "user");
   conversation.push({ role: "user", content: text });
   input.value = "";
   send.disabled = true;
-  statusLabel.textContent = imageMode ? "● GENERATING IMAGE" : "● OMNIX IS THINKING";
-  const pending = addMessage(imageMode ? "Generating image…" : "Thinking…", "assistant");
-
+  statusLabel.textContent = "● OMNIX IS THINKING";
+  const pending = addMessage("Thinking…", "assistant");
   try {
-    if (!imageMode && await handleGmailSearchCommand(text, pending)) {
+    if (await handleGmailSearchCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (!imageMode && await handleGmailCommand(text, pending)) {
+    if (await handleGmailCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (!imageMode && await handleGmailReadCommand(text, pending)) {
+    if (await handleGmailReadCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● GMAIL CONNECTOR";
       return;
     }
-    if (!imageMode && await handleSocialCommand(text, pending)) {
+    if (await handleSocialCommand(text, pending)) {
       conversation.push({ role: "assistant", content: pending.textContent });
       statusLabel.textContent = "● SOCIAL CONNECTOR";
       return;
     }
-    if (imageMode) {
-      const imageResponse = await window.omnixApiFetch(API_URL + "/generate-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
-        signal: AbortSignal.timeout(90000)
-      });
-      const imageData = await imageResponse.json().catch(() => ({}));
-      if (!imageResponse.ok) throw new Error(imageData.error || "Image generation failed (" + imageResponse.status + ").");
-      if (!imageData.image || typeof imageData.image.data !== "string") throw new Error("OMNIX did not receive a generated image. Please try again.");
-      renderGeneratedImage(pending, imageData.image, text);
-      conversation.push({ role: "assistant", content: "Generated an image for: " + text });
-      toggleImageMode();
-      statusLabel.textContent = "● GEMINI IMAGE ONLINE" + (imageData.remainingDaily != null ? " · " + imageData.remainingDaily + " left today" : "");
-      return;
-    }
-
     const response = await window.omnixApiFetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, messages: conversation.slice(-20) }),
       signal: AbortSignal.timeout(35000)
     });
-
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || "The AI service returned an error (" + response.status + ").");
-    }
-    if (typeof data.reply !== "string" || !data.reply.trim()) {
-      throw new Error("OMNIX received an empty response. Please try again.");
-    }
-
+    if (!response.ok) throw new Error(data.error || "The AI service returned an error (" + response.status + ").");
+    if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("OMNIX received an empty response. Please try again.");
     renderFormattedText(pending, data.reply);
     renderSources(pending, data.sources, data.webSearchUnavailable);
     conversation.push({ role: "assistant", content: data.reply });
     const providerLabel = String(data.model || "").startsWith("cloudflare:") ? "BACKUP AI" : "GEMINI";
     statusLabel.textContent = "● " + providerLabel + " ONLINE" + (data.latencyMs ? " · " + (data.latencyMs / 1000).toFixed(1) + "s" : "");
   } catch (error) {
-    pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + (error.message || "Network error") + ")";
+    const errorMessage = error.message || "Unknown error";
+    pending.textContent = "Couldn't reach OMNIX AI. Check your internet connection and try again. (" + errorMessage + ")";
     statusLabel.textContent = "● CONNECTION ISSUE";
+    conversation.push({ role: "assistant", content: pending.textContent });
   } finally {
     send.disabled = false;
     input.focus();
@@ -858,6 +748,7 @@ async function memoryAction(action) {
   if (action === "clear" && !confirm("Delete all saved memories for this browser? This cannot be undone.")) return;
   welcome.style.display = "none";
   addMessage(message, "user");
+  conversation.push({ role: "user", content: message });
   send.disabled = true;
   statusLabel.textContent = "● CHECKING MEMORY";
   const pending = addMessage("Checking memory…", "assistant");
@@ -866,9 +757,11 @@ async function memoryAction(action) {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Memory request failed.");
     pending.textContent = data.reply;
+    conversation.push({ role: "assistant", content: data.reply });
     statusLabel.textContent = "● AI ONLINE";
   } catch (error) {
     pending.textContent = "Could not access memory: " + (error.message || "Network error");
+    conversation.push({ role: "assistant", content: pending.textContent });
     statusLabel.textContent = "● CONNECTION ISSUE";
   } finally {
     send.disabled = false;
@@ -969,269 +862,6 @@ onAuthStateChanged(auth, user => {
   }
 });
 
-const textModeBtn = document.getElementById("textModeBtn");
-const voiceModeBtn = document.getElementById("voiceModeBtn");
-const voicePanel = document.getElementById("voicePanel");
-const voiceStatus = document.getElementById("voiceStatus");
-const voiceConnectBtn = document.getElementById("voiceConnectBtn");
-const voiceStopBtn = document.getElementById("voiceStopBtn");
-const composer = document.getElementById("composer");
-const memoryTools = document.getElementById("memoryTools");
-const statusLabel = document.getElementById("status");
-const messagesEl = document.getElementById("messages");
-let liveSession = null;
-let micStream = null;
-let audioContext = null;
-let micSource = null;
-let micProcessor = null;
-let silentGain = null;
-let nextPlaybackTime = 0;
-let inputTranscript = "";
-let outputTranscript = "";
-let lastVoiceError = "";
-let stopping = false;
-let micChunksSent = 0;
-let lastServerEvent = "none";
-
-function setMode(mode) {
-  const voice = mode === "voice";
-  textModeBtn.classList.toggle("active", !voice);
-  voiceModeBtn.classList.toggle("active", voice);
-  textModeBtn.setAttribute("aria-pressed", String(!voice));
-  voiceModeBtn.setAttribute("aria-pressed", String(voice));
-  voicePanel.hidden = !voice;
-  composer.hidden = voice;
-  memoryTools.hidden = voice;
-  if (voice) {
-    const welcome = document.getElementById("welcome");
-    if (welcome) welcome.style.display = "none";
-  } else if (!window.omnixGetContext().recentMessages.length) {
-    const welcome = document.getElementById("welcome");
-    if (welcome) welcome.style.display = "";
-  }
-}
-textModeBtn.addEventListener("click", () => {
-  if (liveSession || micStream) stopVoiceSession("Voice session ended.");
-  setMode("text");
-});
-voiceModeBtn.addEventListener("click", () => setMode("voice"));
-
-function addTranscriptMessage(text, role) {
-  if (!text || !text.trim()) return;
-  const node = document.createElement("div");
-  node.className = "message " + (role === "user" ? "user" : "assistant");
-  node.textContent = text.trim();
-  messagesEl.appendChild(node);
-  document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
-  window.omnixAppendConversation(role, text.trim());
-}
-function bytesToBase64(bytes) {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-function floatToPcm16Base64(input, sampleRate) {
-  let samples = input;
-  if (sampleRate !== 16000) {
-    const ratio = sampleRate / 16000;
-    const outLength = Math.max(1, Math.floor(input.length / ratio));
-    samples = new Float32Array(outLength);
-    for (let i = 0; i < outLength; i++) {
-      const pos = i * ratio;
-      const left = Math.floor(pos);
-      const right = Math.min(left + 1, input.length - 1);
-      const fraction = pos - left;
-      samples[i] = input[left] * (1 - fraction) + input[right] * fraction;
-    }
-  }
-  const pcm = new Int16Array(samples.length);
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    pcm[i] = s < 0 ? Math.round(s * 32768) : Math.round(s * 32767);
-  }
-  return bytesToBase64(new Uint8Array(pcm.buffer));
-}
-function playAudioChunk(base64) {
-  if (!audioContext) return;
-  try {
-    const binary = atob(base64);
-    const count = Math.floor(binary.length / 2);
-    const buffer = audioContext.createBuffer(1, count, 24000);
-    const channel = buffer.getChannelData(0);
-    for (let i = 0; i < count; i++) {
-      const value = (binary.charCodeAt(i * 2) & 255) | ((binary.charCodeAt(i * 2 + 1) & 255) << 8);
-      channel[i] = (value & 0x8000) ? (value - 0x10000) / 32768 : value / 32767;
-    }
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    const startAt = Math.max(audioContext.currentTime + 0.02, nextPlaybackTime);
-    source.start(startAt);
-    nextPlaybackTime = startAt + buffer.duration;
-  } catch (error) {
-    console.warn("OMNIX audio playback chunk failed:", error);
-  }
-}
-async function startMicrophone() {
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  if (!AudioCtx) throw new Error("This browser does not support live audio.");
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-  });
-  audioContext = new AudioCtx();
-  await audioContext.resume();
-  nextPlaybackTime = audioContext.currentTime;
-  micSource = audioContext.createMediaStreamSource(micStream);
-  micProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-  silentGain = audioContext.createGain();
-  silentGain.gain.value = 0;
-  micProcessor.onaudioprocess = event => {
-    if (!liveSession) return;
-    try {
-      const audioBase64 = floatToPcm16Base64(event.inputBuffer.getChannelData(0), audioContext.sampleRate);
-      liveSession.sendRealtimeInput({ audio: { data: audioBase64, mimeType: "audio/pcm;rate=16000" } });
-      micChunksSent++;
-      if (micChunksSent === 1) {
-        voiceStatus.textContent = "Microphone active. Sending audio to Gemini…";
-        console.log("OMNIX Live: first microphone audio chunk sent", { sampleRate: audioContext.sampleRate, bytes: audioBase64.length });
-      }
-    } catch (error) {
-      lastVoiceError = "Microphone send failed: " + String(error?.message || error).slice(0, 250);
-      voiceStatus.textContent = lastVoiceError;
-      console.warn("OMNIX microphone chunk failed:", error);
-    }
-  };
-  micSource.connect(micProcessor);
-  micProcessor.connect(silentGain);
-  silentGain.connect(audioContext.destination);
-}
-async function startVoiceSession() {
-  if (liveSession || voiceConnectBtn.disabled) return;
-  lastVoiceError = "";
-  lastServerEvent = "none";
-  micChunksSent = 0;
-  stopping = false;
-  voiceConnectBtn.disabled = true;
-  voiceStatus.textContent = "Connecting securely to Gemini Live…";
-  statusLabel.textContent = "● STARTING LIVE VOICE";
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone access requires a secure HTTPS page and a supported browser.");
-    const context = window.omnixGetContext();
-    const response = await window.omnixApiFetch(window.OMNIX_API_URL + "/live-token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(context),
-      signal: AbortSignal.timeout(20000)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.token) throw new Error(data.error || "Live Voice setup failed (" + response.status + ").");
-    const { GoogleGenAI, Modality } = await import("https://esm.sh/@google/genai");
-    const ai = new GoogleGenAI({ apiKey: data.token, httpOptions: { apiVersion: "v1alpha" } });
-    liveSession = await ai.live.connect({
-      model: "gemini-3.8-live",
-      config: {
-        responseModalities: [Modality.AUDIO],
-        sessionResumption: {},
-        inputAudioTranscription: {},
-        outputAudioTranscription: {}
-      },
-      callbacks: {
-        onopen: () => {
-          voiceStatus.textContent = "Connected. Speak naturally — OMNIX is listening.";
-          statusLabel.textContent = "● LIVE VOICE CONNECTED";
-          voiceStopBtn.disabled = false;
-        },
-        onmessage: message => {
-          lastServerEvent = Object.keys(message || {}).join(",") || "empty message";
-          console.log("OMNIX Gemini Live event:", lastServerEvent, message);
-          // Keep a readable server error when Gemini closes a session after setup.
-          if (message?.error) {
-            const e = message.error;
-            lastVoiceError = String(e.message || e.status || JSON.stringify(e)).slice(0, 500);
-            voiceStatus.textContent = "Gemini Live error: " + lastVoiceError;
-            console.warn("OMNIX Gemini Live server error:", message);
-            return;
-          }
-          const server = message?.serverContent || {};
-          if (message?.goAway) {
-            const timeLeft = message.goAway.timeLeft || "soon";
-            voiceStatus.textContent = "Gemini is closing this voice connection (" + timeLeft + "). Reconnecting may be needed.";
-          }
-          const inputText = server.inputTranscription?.text || server.inputAudioTranscription?.text || "";
-          const outputText = server.outputTranscription?.text || server.outputAudioTranscription?.text || "";
-          if (inputText) inputTranscript += inputText;
-          if (outputText) outputTranscript += outputText;
-          for (const part of (server.modelTurn?.parts || [])) {
-            if (part.inlineData?.data && String(part.inlineData.mimeType || "").startsWith("audio/pcm")) {
-              playAudioChunk(part.inlineData.data);
-            }
-          }
-          if (server.interrupted) nextPlaybackTime = audioContext?.currentTime || 0;
-          if (server.turnComplete) {
-            if (inputTranscript.trim()) addTranscriptMessage(inputTranscript, "user");
-            if (outputTranscript.trim()) addTranscriptMessage(outputTranscript, "assistant");
-            inputTranscript = "";
-            outputTranscript = "";
-            voiceStatus.textContent = "Connected. Keep talking whenever you're ready.";
-          }
-        },
-        onerror: event => {
-          const detail = String(event?.message || event?.error?.message || event?.reason || "").trim();
-          lastVoiceError = (detail || JSON.stringify(event) || "Gemini Live reported a connection error.").slice(0, 500);
-          voiceStatus.textContent = "Live Voice error: " + lastVoiceError;
-          statusLabel.textContent = "● LIVE VOICE ISSUE";
-          console.warn("OMNIX Gemini Live error:", event);
-        },
-        onclose: event => {
-          if (!stopping) {
-            const closeInfo = [
-              event?.code != null ? "code " + event.code : "",
-              event?.reason ? "reason: " + event.reason : ""
-            ].filter(Boolean).join(", ");
-            const detail = lastVoiceError
-              ? "Live Voice error: " + lastVoiceError
-              : "Voice connection closed" + (closeInfo ? " (" + closeInfo + ")" : ".") +
-                " Mic chunks: " + micChunksSent + "; last server event: " + lastServerEvent + ".";
-            stopVoiceSession(detail);
-          }
-        }
-      }
-    });
-    await startMicrophone();
-    voiceStopBtn.disabled = false;
-    voiceStatus.textContent = "Connected. Speak naturally — OMNIX is listening.";
-    statusLabel.textContent = "● LIVE VOICE CONNECTED";
-  } catch (error) {
-    stopVoiceSession("Could not start Live Voice: " + (error?.message || "Unknown error"));
-  } finally {
-    voiceConnectBtn.disabled = false;
-  }
-}
-function stopVoiceSession(message = "Voice session ended.") {
-  stopping = true;
-  const session = liveSession;
-  liveSession = null;
-  try { session?.close(); } catch {}
-  try { micProcessor?.disconnect(); } catch {}
-  try { micSource?.disconnect(); } catch {}
-  try { silentGain?.disconnect(); } catch {}
-  micProcessor = null;
-  micSource = null;
-  silentGain = null;
-  if (micStream) micStream.getTracks().forEach(track => track.stop());
-  micStream = null;
-  if (audioContext) audioContext.close().catch(() => {});
-  audioContext = null;
-  nextPlaybackTime = 0;
-  inputTranscript = "";
-  outputTranscript = "";
-  voiceStopBtn.disabled = true;
-  voiceStatus.textContent = message;
-  statusLabel.textContent = "● LIVE VOICE OFFLINE";
-  stopping = false;
-}
-voiceConnectBtn.addEventListener("click", startVoiceSession);
-voiceStopBtn.addEventListener("click", () => stopVoiceSession("Voice session ended. Tap Start Voice to reconnect."));
 </script>
 </body>
 </html>
