@@ -32,12 +32,12 @@ jobs:
           import re
 
           html = pathlib.Path("index.html").read_text(encoding="utf-8")
-          scripts = re.findall(r'<script\\b([^>]*)>(.*?)</script\\s*>', html, re.IGNORECASE | re.DOTALL)
+          scripts = re.findall(r'<script\b([^>]*)>(.*?)</script\s*>', html, re.IGNORECASE | re.DOTALL)
           if not scripts:
               raise SystemExit("No script blocks found in index.html")
 
           for index, (attributes, source) in enumerate(scripts, start=1):
-              is_module = re.search(r'\\btype\\s*=\\s*["\\']module["\\']', attributes, re.IGNORECASE)
+              is_module = "module" in attributes.lower()
               suffix = "mjs" if is_module else "js"
               path = pathlib.Path(f"/tmp/omnix-script-{index}.{suffix}")
               path.write_text(source, encoding="utf-8")
