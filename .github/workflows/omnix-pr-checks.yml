@@ -37,7 +37,7 @@ jobs:
               raise SystemExit("No script blocks found in index.html")
 
           for index, (attributes, source) in enumerate(scripts, start=1):
-              is_module = "module" in attributes.lower()
+              is_module = re.search(r"""type\s*=\s*["']module["']""", attributes, re.IGNORECASE)
               suffix = "mjs" if is_module else "js"
               path = pathlib.Path(f"/tmp/omnix-script-{index}.{suffix}")
               path.write_text(source, encoding="utf-8")
