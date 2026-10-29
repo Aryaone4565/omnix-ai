@@ -1,0 +1,19 @@
+{
+  "name": "OMNIX OS",
+  "short_name": "OMNIX OS",
+  "start_url": "./os.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070914",
+  "theme_color": "#070914",
+  "description": "A futuristic personal AI workspace.",
+  "icons": [
+    {
+      "src": "./os-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
