@@ -723,7 +723,7 @@ async function submitMessage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, messages: conversation.slice(-20) }),
-      signal: AbortSignal.timeout(35000)
+      signal: AbortSignal.timeout(65000)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "The AI service returned an error (" + response.status + ").");
