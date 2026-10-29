@@ -745,6 +745,16 @@ export default {
     const userId = authenticatedUser.uid;
 
     try {
+      // Bootstrap the persistent-memory schema before any memory read/write.
+      // The production D1 database was found with zero tables, causing every
+      // normal chat request to fail at SELECT memory FROM memories.
+      await env.OMNIX_DB.prepare(
+        "CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, memory TEXT NOT NULL, category TEXT NOT NULL DEFAULT 'general', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+      ).run();
+      await env.OMNIX_DB.prepare(
+        "CREATE INDEX IF NOT EXISTS memories_user_id_idx ON memories (user_id, id DESC)"
+      ).run();
+
       const message = getMessageText(body);
       if (!message) return json({ error: "Type a message first." }, 400);
       const lower = message.toLowerCase();
